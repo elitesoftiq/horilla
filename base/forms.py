@@ -1103,7 +1103,21 @@ class EmployeeShiftForm(ModelForm):
         validate_time_format(full_time)
         full_time = self.data["weekly_full_time"]
         validate_time_format(full_time)
-        return super().clean()
+        cleaned_data = super().clean()
+        is_hybrid = cleaned_data.get("is_hybrid")
+        office_days = cleaned_data.get("office_days_per_week")
+        if is_hybrid:
+            if not office_days:
+                self.add_error(
+                    "office_days_per_week",
+                    _("Office days per week is required for hybrid shifts."),
+                )
+            elif office_days < 1:
+                self.add_error(
+                    "office_days_per_week",
+                    _("Office days per week must be at least 1."),
+                )
+        return cleaned_data
 
 
 class EmployeeShiftScheduleUpdateForm(ModelForm):

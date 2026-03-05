@@ -58,6 +58,10 @@ class AttendanceActivity(HorillaModel):
         validators=[attendance_date_validate],
         verbose_name=_("Attendance Date"),
     )
+    PUNCH_SOURCE_CHOICES = [
+        ("app", _("App")),
+        ("biometric", _("Biometric Device")),
+    ]
     shift_day = models.ForeignKey(
         EmployeeShiftDay,
         null=True,
@@ -67,9 +71,22 @@ class AttendanceActivity(HorillaModel):
     in_datetime = models.DateTimeField(null=True)
     clock_in_date = models.DateField(null=True, verbose_name=_("In Date"))
     clock_in = models.TimeField(verbose_name=_("Check In"))
+    clock_in_source = models.CharField(
+        max_length=10,
+        choices=PUNCH_SOURCE_CHOICES,
+        default="app",
+        verbose_name=_("Check-In Source"),
+    )
     clock_out_date = models.DateField(null=True, verbose_name=_("Out Date"))
     out_datetime = models.DateTimeField(null=True)
     clock_out = models.TimeField(null=True, verbose_name=_("Check Out"))
+    clock_out_source = models.CharField(
+        max_length=10,
+        choices=PUNCH_SOURCE_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name=_("Check-Out Source"),
+    )
     objects = HorillaCompanyManager(
         related_company_field="employee_id__employee_work_info__company_id"
     )
@@ -215,6 +232,21 @@ class Attendance(HorillaModel):
     )
     request_type = models.CharField(
         max_length=18, null=True, choices=status, default="update_request"
+    )
+    ATTENDANCE_LOCATION_CHOICES = [
+        ("office", _("Office")),
+        ("wfh", _("Work From Home")),
+    ]
+    attendance_location = models.CharField(
+        max_length=6,
+        choices=ATTENDANCE_LOCATION_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name=_("Attendance Location"),
+        help_text=_(
+            "Automatically set based on punch source. "
+            "Office requires both check-in and check-out via biometric device."
+        ),
     )
     is_holiday = models.BooleanField(default=False)
     requested_data = models.JSONField(null=True, editable=False)
@@ -1026,3 +1058,70 @@ class WorkRecords(models.Model):
         verbose_name = _("Work Record")
         verbose_name_plural = _("Work Records")
         # unique_together = ['date', 'employee_id']
+
+
+class HybridAttendanceViolation(HorillaModel):
+    """
+    Tracks weekly hybrid shift compliance violations.
+    Created by the scheduler every Monday for employees who did not meet
+    their required office days in the previous week.
+    """
+
+    employee_id = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="hybrid_violations",
+        verbose_name=_("Employee"),
+    )
+    week_start_date = models.DateField(verbose_name=_("Week Start Date"))
+    shift_id = models.ForeignKey(
+        EmployeeShift,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("Shift"),
+    )
+    required_office_days = models.PositiveSmallIntegerField(
+        verbose_name=_("Required Office Days")
+    )
+    actual_office_days = models.PositiveSmallIntegerField(
+        default=0, verbose_name=_("Actual Office Days")
+    )
+    is_resolved = models.BooleanField(default=False, verbose_name=_("Resolved"))
+    resolved_by = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_hybrid_violations",
+        verbose_name=_("Resolved By"),
+        editable=False,
+    )
+    note = models.TextField(
+        null=True, blank=True, verbose_name=_("Note"), max_length=255
+    )
+    objects = HorillaCompanyManager(
+        related_company_field="employee_id__employee_work_info__company_id"
+    )
+
+    class Meta:
+        verbose_name = _("Hybrid Attendance Violation")
+        verbose_name_plural = _("Hybrid Attendance Violations")
+        unique_together = [("employee_id", "week_start_date")]
+        ordering = ["-week_start_date", "employee_id__employee_first_name"]
+        permissions = [
+            (
+                "resolve_hybridattendanceviolation",
+                "Resolve Hybrid Attendance Violation",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.employee_id} — week of {self.week_start_date} "
+            f"({self.actual_office_days}/{self.required_office_days} office days)"
+        )
+
+    @property
+    def shortage(self):
+        return max(0, self.required_office_days - self.actual_office_days)

@@ -112,6 +112,40 @@ def late_come(attendance, start_time, end_time, shift):
     return True
 
 
+def _detect_punch_source(request):
+    """
+    Return 'biometric' if the request originates from a biometric device,
+    otherwise 'app'. Biometric requests carry a synthetic datetime attribute
+    set by the device integration layer.
+    """
+    return "biometric" if request.__dict__.get("datetime") else "app"
+
+
+def _update_attendance_location(attendance):
+    """
+    Derive and persist attendance_location on an Attendance record.
+    Only meaningful for hybrid shifts; always recorded for all attendances.
+    Office requires the first check-in AND last check-out to both be via biometric device.
+    """
+    activities = AttendanceActivity.objects.filter(
+        employee_id=attendance.employee_id,
+        attendance_date=attendance.attendance_date,
+    ).order_by("id")
+
+    first_activity = activities.first()
+    last_closed = activities.filter(clock_out__isnull=False).last()
+
+    if first_activity and last_closed:
+        if (
+            first_activity.clock_in_source == "biometric"
+            and last_closed.clock_out_source == "biometric"
+        ):
+            attendance.attendance_location = "office"
+        else:
+            attendance.attendance_location = "wfh"
+        attendance.save(update_fields=["attendance_location"])
+
+
 def clock_in_attendance_and_activity(
     employee,
     date_today,
@@ -123,6 +157,7 @@ def clock_in_attendance_and_activity(
     start_time,
     end_time,
     in_datetime,
+    source="app",
 ):
     """
     This method is used to create attendance activity or attendance when an employee clocks-in
@@ -136,6 +171,7 @@ def clock_in_attendance_and_activity(
         minimum_hour    : minimum hour in shift schedule
         start_time      : start time in shift schedule
         end_time        : end time in shift schedule
+        source          : punch source — 'app' or 'biometric'
     """
 
     # attendance activity create
@@ -159,6 +195,7 @@ def clock_in_attendance_and_activity(
         shift_day=day,
         clock_in=in_datetime,
         in_datetime=in_datetime,
+        clock_in_source=source,
     )
     # create attendance if not exist
     attendance = Attendance.objects.filter(
@@ -292,6 +329,7 @@ def clock_in(request):
                 start_time=start_time_sec,
                 end_time=end_time_sec,
                 in_datetime=datetime_now,
+                source=_detect_punch_source(request),
             )
             script = ""
             hidden_label = ""
@@ -348,13 +386,16 @@ def clock_in(request):
         return HorillaRedirect(request)
 
 
-def clock_out_attendance_and_activity(employee, date_today, now, out_datetime=None):
+def clock_out_attendance_and_activity(
+    employee, date_today, now, out_datetime=None, source="app"
+):
     """
     Clock out the attendance and activity
     args:
         employee    : employee instance
         date_today  : today date
         now         : now
+        source      : punch source — 'app' or 'biometric'
     """
 
     attendance_activities = AttendanceActivity.objects.filter(
@@ -369,6 +410,7 @@ def clock_out_attendance_and_activity(employee, date_today, now, out_datetime=No
         attendance_activity.clock_out = out_datetime
         attendance_activity.clock_out_date = date_today
         attendance_activity.out_datetime = out_datetime
+        attendance_activity.clock_out_source = source
         attendance_activity.save()
 
         attendance_activities = attendance_activities.filter(
@@ -398,6 +440,9 @@ def clock_out_attendance_and_activity(employee, date_today, now, out_datetime=No
         # Validate the attendance as per the condition
         attendance.attendance_validated = attendance_validate(attendance)
         attendance.save()
+
+        # Derive office/WFH location from punch sources
+        _update_attendance_location(attendance)
 
         return attendance
 
@@ -524,7 +569,11 @@ def clock_out(request):
             day=day, shift=shift
         )
         attendance = clock_out_attendance_and_activity(
-            employee=employee, date_today=date_today, now=now, out_datetime=datetime_now
+            employee=employee,
+            date_today=date_today,
+            now=now,
+            out_datetime=datetime_now,
+            source=_detect_punch_source(request),
         )
         if attendance:
             early_out_instance = attendance.late_come_early_out.filter(type="early_out")

@@ -527,6 +527,22 @@ class EmployeeShift(HorillaModel):
             on_delete=models.PROTECT,
             verbose_name=_("Grace Time"),
         )
+    is_hybrid = models.BooleanField(
+        default=False,
+        verbose_name=_("Hybrid Shift"),
+        help_text=_(
+            "Enable this if employees on this shift split their week between office and remote work."
+        ),
+    )
+    office_days_per_week = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Office Days Per Week"),
+        help_text=_(
+            "Number of days per week the employee must attend from the office. "
+            "Office attendance is confirmed when both check-in and check-out are via a biometric device."
+        ),
+    )
 
     objects = HorillaCompanyManager("employee_shift__company_id")
 

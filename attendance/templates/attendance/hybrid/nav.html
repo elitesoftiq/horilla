@@ -1,0 +1,50 @@
+{% load i18n %} {% load basefilters %}
+<section class="oh-wrapper oh-main__topbar" x-data="{searchShow: false}">
+  <div class="oh-main__titlebar oh-main__titlebar--left">
+    <h1 class="oh-main__titlebar-title fw-bold">
+      <a href="{% url 'hybrid-violation-view' %}" class="text-dark">
+        {% trans "Hybrid Compliance" %}
+      </a>
+    </h1>
+    <a class="oh-main__titlebar-search-toggle" role="button" @click="searchShow = !searchShow">
+      <ion-icon name="search-outline" class="oh-main__titlebar-serach-icon"></ion-icon>
+    </a>
+  </div>
+  <form hx-get="{% url 'hybrid-violation-search' %}" id="filterForm" hx-swap="innerHTML" hx-target="#violation-container">
+    <div class="oh-main__titlebar oh-main__titlebar--right">
+      <div class="oh-input-group oh-input__search-group" :class="searchShow ? 'oh-input__search-group--show' : ''">
+        <ion-icon name="search-outline" class="oh-input-group__icon oh-input-group__icon--left"></ion-icon>
+        <input type="text" class="oh-input oh-input__icon" name="search"
+          placeholder="{% trans 'Search' %}" onkeyup="$('.filterButton')[0].click()" />
+      </div>
+      <div class="oh-main__titlebar-button-container">
+        <div class="oh-dropdown" x-data="{open: false}">
+          <button class="oh-btn ml-2" @click="open = !open" onclick="event.preventDefault()">
+            <ion-icon name="filter" class="mr-1"></ion-icon>{% trans "Filter" %}
+            <div id="filterCount"></div>
+          </button>
+          <div class="oh-dropdown__menu oh-dropdown__menu--right oh-dropdown__filter p-4" x-show="open"
+            @click.outside="open = false" style="display: none;">
+            {% include 'attendance/hybrid/filters.html' %}
+          </div>
+        </div>
+      </div>
+      <div class="oh-dropdown ml-2" x-data="{open: false}">
+        <button class="oh-btn oh-btn--dropdown" @click="open = !open" @click.outside="open = false" onclick="event.preventDefault()">
+          {% trans "Actions" %}
+        </button>
+        <div class="oh-dropdown__menu oh-dropdown__menu--right" x-show="open" style="display: none">
+          <ul class="oh-dropdown__items">
+            {% if perms.attendance.delete_hybridattendanceviolation %}
+              <li class="oh-dropdown__item">
+                <a href="#" id="lateComeBulkDelete" data-action="delete" class="oh-dropdown__link oh-dropdown__link--danger">
+                  {% trans "Delete Selected" %}
+                </a>
+              </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </form>
+</section>

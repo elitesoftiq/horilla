@@ -52,6 +52,7 @@ from attendance.filters import (
     AttendanceOverTimeFilter,
     AttendanceOvertimeReGroup,
     AttendanceReGroup,
+    HybridViolationFilters,
     LateComeEarlyOutFilter,
     LateComeEarlyOutReGroup,
 )
@@ -93,6 +94,7 @@ from attendance.models import (
     AttendanceValidationCondition,
     BatchAttendance,
     GraceTime,
+    HybridAttendanceViolation,
     WorkRecords,
 )
 from attendance.views.handle_attendance_errors import handle_attendance_errors
@@ -107,6 +109,7 @@ from base.methods import (
     filtersubordinatesemployeemodel,
     get_key_instances,
     get_pagination,
+    is_reportingmanager,
 )
 from base.models import (
     AttendanceAllowedIP,
@@ -2742,4 +2745,129 @@ def edit_allowed_ips(request):
         request,
         "attendance/ip_restriction/restrict_form.html",
         {"form": form, "id": id},
+    )
+
+
+# ─── Hybrid Attendance Violations ──────────────────────────────────────────────
+
+
+@login_required
+def hybrid_violation_view(request):
+    """
+    List view for hybrid attendance violations (employees who missed their
+    required office days in a given week).
+    """
+    violations = HybridAttendanceViolation.objects.all()
+    if not (
+        request.user.has_perm("attendance.view_hybridattendanceviolation")
+        or is_reportingmanager(request)
+    ):
+        violations = violations.filter(
+            employee_id__employee_user_id=request.user
+        )
+    violations = filtersubordinates(
+        request, violations, "attendance.view_hybridattendanceviolation"
+    )
+    filter_obj = HybridViolationFilters(request.GET, queryset=violations)
+    violations = filter_obj.qs
+    return render(
+        request,
+        "attendance/hybrid/violations.html",
+        {
+            "violations": violations,
+            "f": filter_obj,
+            "gp_fields": [
+                ("employee_id__employee_work_info__department_id", "Department"),
+                ("shift_id", "Shift"),
+                ("is_resolved", "Resolved"),
+            ],
+        },
+    )
+
+
+@login_required
+def hybrid_violation_single_view(request, obj_id):
+    """
+    Single-record detail modal for a hybrid violation.
+    """
+    violation = HybridAttendanceViolation.objects.filter(id=obj_id).first()
+    previous_id, next_id = closest_numbers(
+        list(
+            HybridAttendanceViolation.objects.values_list("id", flat=True)
+        ),
+        obj_id,
+    )
+    instance_ids_json = request.GET.get("instances_ids", "[]")
+    return render(
+        request,
+        "attendance/hybrid/single_violation.html",
+        {
+            "violation": violation,
+            "pd": request.GET.urlencode(),
+            "previous_instance": previous_id,
+            "next_instance": next_id,
+            "instance_ids_json": instance_ids_json,
+        },
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def hybrid_violation_resolve(request, obj_id):
+    """
+    Mark a hybrid violation as resolved. Manager/HR only.
+    """
+    if not (
+        request.user.has_perm("attendance.resolve_hybridattendanceviolation")
+        or is_reportingmanager(request)
+    ):
+        messages.error(request, _("You do not have permission to resolve violations."))
+        return HorillaRedirect(request)
+
+    violation = HybridAttendanceViolation.objects.filter(id=obj_id).first()
+    if violation:
+        violation.is_resolved = True
+        violation.resolved_by = request.user.employee_get
+        violation.note = request.POST.get("note", "")
+        violation.save()
+        messages.success(request, _("Violation marked as resolved."))
+    return HttpResponse(
+        '<span hx-get="{}" hx-target="#violation-container" hx-trigger="load"></span>'.format(
+            reverse("hybrid-violation-search") + "?" + request.GET.urlencode()
+        )
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def hybrid_violation_delete(request, obj_id):
+    """
+    Delete a single hybrid violation record.
+    """
+    try:
+        violation = HybridAttendanceViolation.objects.get(id=obj_id)
+        violation.delete()
+        messages.success(request, _("Violation deleted successfully."))
+    except HybridAttendanceViolation.DoesNotExist:
+        messages.error(request, _("Violation not found."))
+    return HttpResponse(
+        '<span hx-get="{}" hx-target="#violation-container" hx-trigger="load"></span>'.format(
+            reverse("hybrid-violation-search") + "?" + request.GET.urlencode()
+        )
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def hybrid_violation_bulk_delete(request):
+    """
+    Bulk delete hybrid violation records.
+    """
+    ids = request.POST.getlist("ids")
+    HybridAttendanceViolation.objects.filter(id__in=ids).delete()
+    messages.success(request, _("Selected violations deleted."))
+    return HttpResponse(
+        '<span hx-get="{}" hx-target="#violation-container" hx-trigger="load"></span>'.format(
+            reverse("hybrid-violation-search") + "?" + request.GET.urlencode()
+        )
     )

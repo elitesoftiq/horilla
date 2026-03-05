@@ -533,4 +533,35 @@ urlpatterns = [
         attendance.views.geofaceconfig.geofaceconfig,
         name="geo-face-config",
     ),
+    # ── Hybrid Attendance Violations ──────────────────────────────────────────
+    path(
+        "hybrid-violations/",
+        views.hybrid_violation_view,
+        name="hybrid-violation-view",
+    ),
+    path(
+        "hybrid-violations/search",
+        attendance.views.search.hybrid_violation_search,
+        name="hybrid-violation-search",
+    ),
+    path(
+        "hybrid-violations/<int:obj_id>/",
+        views.hybrid_violation_single_view,
+        name="hybrid-violation-single-view",
+    ),
+    path(
+        "hybrid-violations/<int:obj_id>/resolve/",
+        views.hybrid_violation_resolve,
+        name="hybrid-violation-resolve",
+    ),
+    path(
+        "hybrid-violations/<int:obj_id>/delete/",
+        views.hybrid_violation_delete,
+        name="hybrid-violation-delete",
+    ),
+    path(
+        "hybrid-violations/bulk-delete",
+        views.hybrid_violation_bulk_delete,
+        name="hybrid-violation-bulk-delete",
+    ),
 ]

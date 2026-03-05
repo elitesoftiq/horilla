@@ -6,6 +6,7 @@
 			<div class="oh-sticky-table__thead">
 				<div class="oh-sticky-table__tr">
 					<div class="oh-sticky-table__th">{% trans "Shift" %}</div>
+					<div class="oh-sticky-table__th">{% trans "Type" %}</div>
 					<div class="oh-sticky-table__th">{% trans "Weekly Full Time" %}</div>
 					<div class="oh-sticky-table__th">{% trans "Full Time" %}</div>
 					<div class="oh-sticky-table__th">{% trans "Grace Time" %}</div>
@@ -18,6 +19,15 @@
 				{% for shift in shifts %}
 					<div class="oh-sticky-table__tr" draggable="true" id="shiftTr{{shift.id}}">
 						<div class="oh-sticky-table__td">{{shift}}</div>
+						<div class="oh-sticky-table__td">
+							{% if shift.is_hybrid %}
+								<span class="oh-badge oh-badge--info" title="{% trans 'Office days required per week' %}: {{shift.office_days_per_week}}">
+									{% trans "Hybrid" %} ({{shift.office_days_per_week}}d)
+								</span>
+							{% else %}
+								<span class="oh-badge oh-badge--secondary">{% trans "Standard" %}</span>
+							{% endif %}
+						</div>
 						<div class="oh-sticky-table__td">{{shift.weekly_full_time}}</div>
 						<div class="oh-sticky-table__td">{{shift.full_time}}</div>
 						{% if shift.grace_time_id %}

@@ -20,3 +20,29 @@
         </div>
     </form>
 </div>
+<script>
+(function () {
+    function toggleOfficeDays() {
+        var hybridCheckbox = document.querySelector('[name="is_hybrid"]');
+        var officeDaysRow = document.querySelector('[name="office_days_per_week"]');
+        if (!hybridCheckbox || !officeDaysRow) return;
+        var wrapper = officeDaysRow.closest('p') || officeDaysRow.closest('.oh-input-group') || officeDaysRow.parentElement;
+        if (wrapper) wrapper.style.display = hybridCheckbox.checked ? '' : 'none';
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        var hybridCheckbox = document.querySelector('[name="is_hybrid"]');
+        if (hybridCheckbox) {
+            toggleOfficeDays();
+            hybridCheckbox.addEventListener('change', toggleOfficeDays);
+        }
+    });
+    // Handle htmx loads (form injected after page load)
+    document.body.addEventListener('htmx:afterSwap', function () {
+        var hybridCheckbox = document.querySelector('[name="is_hybrid"]');
+        if (hybridCheckbox) {
+            toggleOfficeDays();
+            hybridCheckbox.addEventListener('change', toggleOfficeDays);
+        }
+    });
+})();
+</script>

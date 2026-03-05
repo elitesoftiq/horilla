@@ -109,6 +109,9 @@
                                 hx-target="#tab_contents">
                                 {% trans "Overtime" %}
                             </div>
+                            <div data-cell-index="14" data-cell-title='{% trans "Location" %}' class="oh-sticky-table__th">
+                                {% trans "Location" %}
+                            </div>
                             <div class="oh-sticky-table__th oh-sticky-table__right">{% trans "Actions" %}</div>
                         </div>
                     </div>
@@ -160,6 +163,21 @@
                                 <div data-cell-index="12" class="oh-sticky-table__td">{{ attendance.hours_pending }}</div>
                                 <div data-cell-index="13" class="oh-sticky-table__td">
                                     {{attendance.attendance_overtime}}
+                                </div>
+                                <div data-cell-index="14" class="oh-sticky-table__td">
+                                    {% if attendance.attendance_location == "office" %}
+                                        <span class="oh-badge oh-badge--success" title="{% trans 'Both check-in and check-out via biometric device' %}">
+                                            <ion-icon name="business-outline" class="mr-1"></ion-icon>{% trans "Office" %}
+                                        </span>
+                                    {% elif attendance.attendance_location == "wfh" %}
+                                        <span class="oh-badge oh-badge--info" title="{% trans 'At least one punch was via app' %}">
+                                            <ion-icon name="home-outline" class="mr-1"></ion-icon>{% trans "WFH" %}
+                                        </span>
+                                    {% else %}
+                                        {% if attendance.shift_id and attendance.shift_id.is_hybrid %}
+                                            <span class="oh-badge oh-badge--secondary">{% trans "Pending" %}</span>
+                                        {% endif %}
+                                    {% endif %}
                                 </div>
                                 <div class="oh-sticky-table__td oh-sticky-table__right">
                                     <div class="oh-btn-group">

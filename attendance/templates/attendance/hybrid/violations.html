@@ -1,0 +1,63 @@
+{% extends 'index.html' %}
+{% load i18n %}
+{% load static %}
+{% block content %}
+{% include 'attendance/hybrid/nav.html' %}
+<div class="oh-checkpoint-badge mb-2" id="selectedViolation" data-ids="[]" data-clicked="" style="display:none;">
+  {% trans 'Selected Violations' %}
+</div>
+<div class="oh-wrapper">
+  <div class="oh-checkpoint-badge text-success mb-2" id="selectAllViolations" style="cursor: pointer;">
+    {% trans 'Select All' %}
+  </div>
+  <div class="oh-checkpoint-badge text-secondary mb-2" id="unselectAllViolations" style="cursor: pointer; display: none;">
+    {% trans 'Unselect All' %}
+  </div>
+  <div class="oh-checkpoint-badge text-danger mb-2" id="selectedShowViolation"></div>
+  <div id="violation-container">
+    <span hx-get="{% url 'hybrid-violation-search' %}" hx-target="#violation-container" hx-trigger="load"></span>
+  </div>
+</div>
+
+<div class="oh-modal" id="violationDetailModal" role="dialog" aria-hidden="true">
+  <div class="oh-modal__dialog" id="violationDetailModalTarget" style="max-width: 600px;"></div>
+</div>
+
+<script>
+  function addingViolationIds() {
+    var ids = [];
+    $(".all-violation-row:checked").each(function () { ids.push($(this).attr("id")); });
+    $("#selectedViolation").attr("data-ids", JSON.stringify(ids));
+    if (ids.length > 0) {
+      $("#selectedViolation").show();
+      $("#selectedShowViolation").show();
+    } else {
+      $("#selectedViolation").hide();
+      $("#selectedShowViolation").hide();
+    }
+  }
+  $(document).ready(function () {
+    $("#selectAllViolations").click(function () {
+      $(".all-violation-row").prop("checked", true).change();
+      $("#selectAllViolations").hide();
+      $("#unselectAllViolations").show();
+    });
+    $("#unselectAllViolations").click(function () {
+      $(".all-violation-row").prop("checked", false).change();
+      $("#unselectAllViolations").hide();
+      $("#selectAllViolations").show();
+    });
+    $("#lateComeBulkDelete").click(function () {
+      var ids = JSON.parse($("#selectedViolation").attr("data-ids") || "[]");
+      if (ids.length === 0) { alert("{% trans 'No violations selected.' %}"); return; }
+      if (!confirm("{% trans 'Delete selected violations?' %}")) return;
+      $.ajax({
+        type: "POST",
+        url: "{% url 'hybrid-violation-bulk-delete' %}",
+        data: { ids: ids, csrfmiddlewaretoken: getCookie("csrftoken") },
+        success: function () { htmx.trigger("#violation-container", "htmx:load"); }
+      });
+    });
+  });
+</script>
+{% endblock %}

@@ -49,6 +49,11 @@ SUBMENUS = [
         "accessibility": "attendance.sidebar.tracking_accessibility",
     },
     {
+        "menu": _("Hybrid Compliance"),
+        "redirect": reverse("hybrid-violation-view"),
+        "accessibility": "attendance.sidebar.hybrid_accessibility",
+    },
+    {
         "menu": _("My Attendances"),
         "redirect": reverse("view-my-attendance"),
     },
@@ -95,3 +100,15 @@ def tracking_accessibility(request, submenu, user_perms, *args, **kwargs):
     Determine if late come/early out tracking is enabled.
     """
     return enable_late_come_early_out_tracking(None).get("tracking")
+
+
+def hybrid_accessibility(request, submenu, user_perms, *args, **kwargs):
+    """
+    Show Hybrid Compliance menu only when there are hybrid shifts configured.
+    """
+    from base.models import EmployeeShift
+
+    return (
+        request.user.has_perm("attendance.view_hybridattendanceviolation")
+        or is_reportingmanager(request.user)
+    ) and EmployeeShift.objects.filter(is_hybrid=True, is_active=True).exists()

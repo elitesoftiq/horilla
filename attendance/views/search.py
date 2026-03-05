@@ -16,6 +16,7 @@ from attendance.filters import (
     AttendanceActivityFilter,
     AttendanceFilters,
     AttendanceOverTimeFilter,
+    HybridViolationFilters,
     LateComeEarlyOutFilter,
 )
 from attendance.forms import AttendanceOverTimeForm
@@ -25,9 +26,10 @@ from attendance.models import (
     AttendanceLateComeEarlyOut,
     AttendanceOverTime,
     AttendanceValidationCondition,
+    HybridAttendanceViolation,
 )
 from attendance.views.views import paginator_qry, strtime_seconds
-from base.methods import filtersubordinates, get_key_instances, sortby
+from base.methods import filtersubordinates, get_key_instances, is_reportingmanager, sortby
 from horilla.decorators import hx_request_required, login_required, manager_can_enter
 from horilla.group_by import group_by_queryset
 
@@ -487,3 +489,46 @@ def widget_filter(request):
     """
     ids = AttendanceFilters(request.GET).qs.values_list("id", flat=True)
     return JsonResponse({"ids": list(ids)})
+
+
+@login_required
+@hx_request_required
+def hybrid_violation_search(request):
+    """
+    Search and paginate hybrid attendance violations.
+    """
+    previous_data = request.GET.urlencode()
+    violations = HybridAttendanceViolation.objects.all()
+    violations = filtersubordinates(
+        request, violations, "attendance.view_hybridattendanceviolation"
+    )
+    filter_obj = HybridViolationFilters(request.GET, queryset=violations)
+    field = request.GET.get("field", "")
+    violations_qs = sortby(request, filter_obj.qs, "week_start_date")
+    violation_ids = json.dumps(
+        [
+            instance.id
+            for instance in paginator_qry(
+                violations_qs, request.GET.get("page")
+            ).object_list
+        ]
+    )
+    template = "attendance/hybrid/violation_list.html"
+    if field and field is not None:
+        violations_qs = group_by_queryset(
+            violations_qs, field, request.GET.get("page"), "page"
+        )
+        template = "attendance/hybrid/group_by.html"
+    else:
+        violations_qs = paginator_qry(violations_qs, request.GET.get("page"))
+    return render(
+        request,
+        template,
+        {
+            "violations": violations_qs,
+            "violation_ids": violation_ids,
+            "pd": previous_data,
+            "filter_dict": dict(parse_qs(previous_data)),
+            "field": field,
+        },
+    )

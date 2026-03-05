@@ -1,0 +1,110 @@
+{% load i18n %} {% load static %} {% load basefilters %}
+{% if violation %}
+  <div class="oh-modal__dialog-header pb-0">
+    <div class="oh-modal__dialog oh-modal__dialog--navigation m-0 p-0">
+      <button hx-get="{% url 'hybrid-violation-single-view' previous_instance %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
+        hx-target="#violationDetailModalTarget" class="oh-modal__diaglog-nav oh-modal__nav-prev">
+        <ion-icon name="chevron-back-outline"></ion-icon>
+      </button>
+      <button hx-get="{% url 'hybrid-violation-single-view' next_instance %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
+        hx-target="#violationDetailModalTarget" class="oh-modal__diaglog-nav oh-modal__nav-next">
+        <ion-icon name="chevron-forward-outline"></ion-icon>
+      </button>
+    </div>
+    <button class="oh-modal__close" aria-label="Close">
+      <ion-icon name="close-outline"></ion-icon>
+    </button>
+  </div>
+  <div class="oh-modal__dialog-body oh-modal__dialog-relative">
+    <a class="oh-timeoff-modal__profile-content" style="text-decoration: none"
+      href="{% url 'employee-view-individual' violation.employee_id.id %}">
+      <div class="oh-profile mb-2">
+        <div class="oh-profile__avatar">
+          <img src="{{ violation.employee_id.get_avatar }}" class="oh-profile__image me-2" alt="" />
+        </div>
+        <div class="oh-timeoff-modal__profile-info">
+          <span class="oh-timeoff-modal__user fw-bold">{{ violation.employee_id }}</span>
+          <span class="oh-timeoff-modal__user m-0" style="font-size: 18px; color: #4d4a4a">
+            {{ violation.employee_id.employee_work_info.department_id }} /
+            {{ violation.employee_id.employee_work_info.job_position_id }}
+          </span>
+        </div>
+      </div>
+    </a>
+    <div class="oh-modal__dialog-header pt-0">
+      <div class="oh-timeoff-modal__stats-container mt-3 mb-3">
+        <div class="oh-timeoff-modal__stat">
+          <span class="oh-timeoff-modal__stat-title">{% trans "Week Of" %}</span>
+          <span class="oh-timeoff-modal__stat-count dateformat_changer">{{ violation.week_start_date }}</span>
+        </div>
+        <div class="oh-timeoff-modal__stat" style="margin-left: 20px">
+          <span class="oh-timeoff-modal__stat-title">{% trans "Shift" %}</span>
+          <span class="oh-timeoff-modal__stat-count">{{ violation.shift_id }}</span>
+        </div>
+      </div>
+      <div class="oh-timeoff-modal__stats-container mt-3 mb-3">
+        <div class="oh-timeoff-modal__stat">
+          <span class="oh-timeoff-modal__stat-title">{% trans "Required Office Days" %}</span>
+          <span class="oh-timeoff-modal__stat-count">{{ violation.required_office_days }}</span>
+        </div>
+        <div class="oh-timeoff-modal__stat" style="margin-left: 20px">
+          <span class="oh-timeoff-modal__stat-title">{% trans "Actual Office Days" %}</span>
+          <span class="oh-timeoff-modal__stat-count">{{ violation.actual_office_days }}</span>
+        </div>
+      </div>
+      <div class="oh-timeoff-modal__stats-container mt-3 mb-3">
+        <div class="oh-timeoff-modal__stat">
+          <span class="oh-timeoff-modal__stat-title">{% trans "Shortage" %}</span>
+          <span class="oh-timeoff-modal__stat-count oh-badge oh-badge--danger">{{ violation.shortage }}</span>
+        </div>
+        <div class="oh-timeoff-modal__stat" style="margin-left: 20px">
+          <span class="oh-timeoff-modal__stat-title">{% trans "Status" %}</span>
+          <span class="oh-timeoff-modal__stat-count">
+            {% if violation.is_resolved %}
+              <span class="oh-badge oh-badge--success">{% trans "Resolved" %}</span>
+              {% if violation.resolved_by %}
+                <small class="text-muted d-block">{% trans "by" %} {{ violation.resolved_by }}</small>
+              {% endif %}
+            {% else %}
+              <span class="oh-badge oh-badge--warning">{% trans "Open" %}</span>
+            {% endif %}
+          </span>
+        </div>
+      </div>
+      {% if violation.note %}
+        <div class="oh-timeoff-modal__stats-container mt-3 mb-3">
+          <div class="oh-timeoff-modal__stat">
+            <span class="oh-timeoff-modal__stat-title">{% trans "Note" %}</span>
+            <span class="oh-timeoff-modal__stat-count">{{ violation.note }}</span>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if not violation.is_resolved and request.user|is_reportingmanager or perms.attendance.resolve_hybridattendanceviolation %}
+        <div class="oh-modal__button-container text-center mt-3">
+          <form hx-post="{% url 'hybrid-violation-resolve' violation.id %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
+            hx-target="#violationDetailModalTarget">
+            {% csrf_token %}
+            <div class="oh-input-group mb-2">
+              <label class="oh-label">{% trans "Resolution Note (optional)" %}</label>
+              <textarea name="note" class="oh-input" rows="2" maxlength="255"></textarea>
+            </div>
+            <button type="submit" class="oh-btn oh-btn--success w-100">
+              <ion-icon name="checkmark-circle-outline" class="mr-1"></ion-icon>
+              {% trans "Mark as Resolved" %}
+            </button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <div class="oh-modal__dialog-header">
+    <button class="oh-modal__close" aria-label="Close">
+      <ion-icon name="close-outline"></ion-icon>
+    </button>
+  </div>
+  <div class="oh-modal__dialog-body">
+    <h5 class="oh-404__subtitle">{% trans "Violation record not found." %}</h5>
+  </div>
+{% endif %}
