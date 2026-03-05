@@ -1098,6 +1098,17 @@ class EmployeeShiftForm(ModelForm):
         fields = "__all__"
         exclude = ["days", "is_active"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["office_days_per_week"].widget = forms.NumberInput(
+            attrs={"min": 1, "max": 6, "class": "oh-input w-100"}
+        )
+
+    def as_p(self):
+        from django.template.loader import render_to_string
+
+        return render_to_string("horilla_form.html", {"form": self})
+
     def clean(self):
         full_time = self.data["full_time"]
         validate_time_format(full_time)

@@ -13,36 +13,24 @@
         class="oh-profile-section">
         {% csrf_token %} {{form.non_field_errors}}
         {{form.as_p}}
-        <div class="oh-modal__dialog-footer p-0 mt-3">
-            <button type="submit" class="oh-btn oh-btn--secondary oh-btn--shadow">
-                {% trans "Save" %}
-            </button>
-        </div>
     </form>
 </div>
 <script>
 (function () {
     function toggleOfficeDays() {
         var hybridCheckbox = document.querySelector('[name="is_hybrid"]');
-        var officeDaysRow = document.querySelector('[name="office_days_per_week"]');
-        if (!hybridCheckbox || !officeDaysRow) return;
-        var wrapper = officeDaysRow.closest('p') || officeDaysRow.closest('.oh-input-group') || officeDaysRow.parentElement;
-        if (wrapper) wrapper.style.display = hybridCheckbox.checked ? '' : 'none';
+        var wrapper = document.getElementById('id_office_days_per_week_parent_div');
+        if (!hybridCheckbox || !wrapper) return;
+        wrapper.style.display = hybridCheckbox.checked ? '' : 'none';
     }
-    document.addEventListener('DOMContentLoaded', function () {
+    function initToggle() {
         var hybridCheckbox = document.querySelector('[name="is_hybrid"]');
         if (hybridCheckbox) {
             toggleOfficeDays();
             hybridCheckbox.addEventListener('change', toggleOfficeDays);
         }
-    });
-    // Handle htmx loads (form injected after page load)
-    document.body.addEventListener('htmx:afterSwap', function () {
-        var hybridCheckbox = document.querySelector('[name="is_hybrid"]');
-        if (hybridCheckbox) {
-            toggleOfficeDays();
-            hybridCheckbox.addEventListener('change', toggleOfficeDays);
-        }
-    });
+    }
+    document.addEventListener('DOMContentLoaded', initToggle);
+    document.body.addEventListener('htmx:afterSwap', initToggle);
 })();
 </script>
