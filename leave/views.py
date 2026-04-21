@@ -357,6 +357,27 @@ def get_employee_leave_types(request):
     return HttpResponse(leave_type_field_html)
 
 
+@login_required
+def check_hourly_leave_type(request):
+    """
+    HTMX endpoint to check if a leave type is hourly.
+    Returns JSON with is_hourly and hours_per_day.
+    """
+    leave_type_id = request.GET.get("leave_type_id")
+    if leave_type_id:
+        try:
+            leave_type = LeaveType.objects.get(id=leave_type_id)
+            return JsonResponse(
+                {
+                    "is_hourly": leave_type.is_hourly_leave,
+                    "hours_per_day": leave_type.hours_per_day,
+                }
+            )
+        except LeaveType.DoesNotExist:
+            pass
+    return JsonResponse({"is_hourly": False, "hours_per_day": 8})
+
+
 def multiple_approvals_check(id):
     approvals = LeaveRequestConditionApproval.objects.filter(leave_request_id=id)
     requested_query = approvals.filter(is_approved=False).order_by("sequence")
@@ -2184,46 +2205,52 @@ def user_leave_request(request, id):
     if request.method == "POST":
         form = UserLeaveRequestForm(request.POST, request.FILES, employee=employee)
         start_date = datetime.strptime(request.POST.get("start_date"), "%Y-%m-%d")
-        end_date = datetime.strptime(request.POST.get("end_date"), "%Y-%m-%d")
-        start_date_breakdown = request.POST.get("start_date_breakdown")
-        end_date_breakdown = request.POST.get("end_date_breakdown")
         available_leave = AvailableLeave.objects.get(
             employee_id=employee, leave_type_id=leave_type
         )
         available_total_leave = (
             available_leave.available_days + available_leave.carryforward_days
         )
-        requested_days = calculate_requested_days(
-            start_date, end_date, start_date_breakdown, end_date_breakdown
-        )
-        requested_dates = leave_requested_dates(start_date, end_date)
-        requested_dates = [date.date() for date in requested_dates]
-        holidays = Holidays.objects.all()
-        holiday_dates = holiday_dates_list(holidays)
-        company_leaves = CompanyLeaves.objects.all()
-        company_leave_dates = company_leave_dates_list(company_leaves, start_date)
-        if (
-            leave_type.exclude_company_leave == "yes"
-            and leave_type.exclude_holiday == "yes"
-        ):
-            total_leaves = list(set(holiday_dates + company_leave_dates))
-            total_leave_count = sum(
-                requested_date in total_leaves for requested_date in requested_dates
-            )
-            requested_days = requested_days - total_leave_count
+
+        if leave_type.is_hourly_leave:
+            # For hourly leave, requested_days is calculated in model save()
+            requested_days = 0
+            end_date = start_date
         else:
-            holiday_count = 0
-            if leave_type.exclude_holiday == "yes":
-                for requested_date in requested_dates:
-                    if requested_date in holiday_dates:
-                        holiday_count += 1
-                requested_days = requested_days - holiday_count
-            if leave_type.exclude_company_leave == "yes":
-                company_leave_count = sum(
-                    requested_date in company_leave_dates
-                    for requested_date in requested_dates
+            end_date = datetime.strptime(request.POST.get("end_date"), "%Y-%m-%d")
+            start_date_breakdown = request.POST.get("start_date_breakdown")
+            end_date_breakdown = request.POST.get("end_date_breakdown")
+            requested_days = calculate_requested_days(
+                start_date, end_date, start_date_breakdown, end_date_breakdown
+            )
+            requested_dates = leave_requested_dates(start_date, end_date)
+            requested_dates = [date.date() for date in requested_dates]
+            holidays = Holidays.objects.all()
+            holiday_dates = holiday_dates_list(holidays)
+            company_leaves = CompanyLeaves.objects.all()
+            company_leave_dates = company_leave_dates_list(company_leaves, start_date)
+            if (
+                leave_type.exclude_company_leave == "yes"
+                and leave_type.exclude_holiday == "yes"
+            ):
+                total_leaves = list(set(holiday_dates + company_leave_dates))
+                total_leave_count = sum(
+                    requested_date in total_leaves for requested_date in requested_dates
                 )
-                requested_days = requested_days - company_leave_count
+                requested_days = requested_days - total_leave_count
+            else:
+                holiday_count = 0
+                if leave_type.exclude_holiday == "yes":
+                    for requested_date in requested_dates:
+                        if requested_date in holiday_dates:
+                            holiday_count += 1
+                    requested_days = requested_days - holiday_count
+                if leave_type.exclude_company_leave == "yes":
+                    company_leave_count = sum(
+                        requested_date in company_leave_dates
+                        for requested_date in requested_dates
+                    )
+                    requested_days = requested_days - company_leave_count
 
         if form.is_valid():
             leave_request = form.save(commit=False)
@@ -3957,6 +3984,10 @@ def employee_available_leave_count(request):
                 start_date__gte=datetime.today().date(),
             ).count()
 
+    is_hourly = False
+    if available_leave and available_leave.leave_type_id.is_hourly_leave:
+        is_hourly = True
+
     context = {
         "hx_target": hx_target,
         "leave_type_id": leave_type_id,
@@ -3964,6 +3995,7 @@ def employee_available_leave_count(request):
         "total_leave_days": total_leave_days,
         "forcasted_days": forcasted_days,
         "pending_requests": pending_requests_days,
+        "is_hourly": is_hourly,
     }
     return render(
         request, "leave/leave_request/employee_available_leave_count.html", context

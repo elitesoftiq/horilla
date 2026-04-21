@@ -31,6 +31,11 @@ urlpatterns = [
         name="get-employee-leave-types",
     ),
     path(
+        "check-hourly-leave-type",
+        views.check_hourly_leave_type,
+        name="check-hourly-leave-type",
+    ),
+    path(
         "leave-request-creation/<int:type_id>/<int:emp_id>",
         views.leave_request_creation,
         name="leave-request-creation",

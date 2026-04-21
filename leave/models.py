@@ -238,6 +238,14 @@ class LeaveType(HorillaModel):
     exclude_holiday = models.CharField(
         max_length=30, choices=CHOICES, default="no", verbose_name=_("Exclude Holidays")
     )
+    is_hourly_leave = models.BooleanField(
+        default=False, verbose_name=_("Hourly Leave")
+    )
+    hours_per_day = models.FloatField(
+        default=8,
+        verbose_name=_("Hours Per Day"),
+        help_text=_("Working hours per day used for hourly leave calculations"),
+    )
     is_compensatory_leave = models.BooleanField(default=False)
     company_id = models.ForeignKey(
         Company, null=True, blank=True, on_delete=models.PROTECT
@@ -643,8 +651,17 @@ class LeaveRequest(HorillaModel):
         default="full_day",
         verbose_name=_("End Date Breakdown"),
     )
+    start_time = models.TimeField(
+        null=True, blank=True, verbose_name=_("Start Time")
+    )
+    end_time = models.TimeField(
+        null=True, blank=True, verbose_name=_("End Time")
+    )
     requested_days = models.FloatField(
         blank=True, null=True, verbose_name=_("Requested Days")
+    )
+    requested_hours = models.FloatField(
+        blank=True, null=True, default=0, verbose_name=_("Requested Hours")
     )
     leave_clashes_count = models.IntegerField(
         default=0, verbose_name=_("Leave Clashes Count")
@@ -833,12 +850,28 @@ class LeaveRequest(HorillaModel):
 
     def save(self, *args, **kwargs):
 
-        self.requested_days = calculate_requested_days(
-            self.start_date,
-            self.end_date,
-            self.start_date_breakdown,
-            self.end_date_breakdown,
-        )
+        if self.leave_type_id.is_hourly_leave and self.start_time and self.end_time:
+            # For hourly leave, calculate requested_hours from time range
+            start_dt = datetime.combine(self.start_date, self.start_time)
+            end_dt = datetime.combine(self.start_date, self.end_time)
+            if end_dt > start_dt:
+                delta = end_dt - start_dt
+                self.requested_hours = round(delta.total_seconds() / 3600, 2)
+            else:
+                self.requested_hours = 0
+            # For hourly leave, requested_days stores hours directly
+            # (available_days/total_days also store hours for hourly leave types)
+            self.requested_days = self.requested_hours
+            # Hourly leave is always single-day
+            self.end_date = self.start_date
+        else:
+            self.requested_days = calculate_requested_days(
+                self.start_date,
+                self.end_date,
+                self.start_date_breakdown,
+                self.end_date_breakdown,
+            )
+            self.requested_hours = 0
         if (
             self.leave_type_id.exclude_company_leave == "yes"
             and self.leave_type_id.exclude_holiday == "yes"

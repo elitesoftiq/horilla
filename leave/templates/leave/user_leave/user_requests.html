@@ -67,6 +67,7 @@
                     <div class="oh-sticky-table__th {% if request.sort_option.order == '-start_date' %}arrow-up {% elif request.sort_option.order == 'start_date' %}arrow-down {% else %}arrow-up-down {% endif %}" hx-get="{% url 'user-request-filter' %}?{{pd}}&sortby=start_date" hx-target="#userRequest">{% trans "Start Date" %}</div>
                     <div class="oh-sticky-table__th {% if request.sort_option.order == '-end_date' %}arrow-up {% elif request.sort_option.order == 'end_date' %}arrow-down {% else %}arrow-up-down {% endif %}" hx-get="{% url 'user-request-filter' %}?{{pd}}&sortby=end_date" hx-target="#userRequest">{% trans "End Date" %}</div>
                     <div class="oh-sticky-table__th {% if request.sort_option.order == '-requested_days' %}arrow-up {% elif request.sort_option.order == 'requested_days' %}arrow-down {% else %}arrow-up-down {% endif %}" hx-get="{% url 'user-request-filter' %}?{{pd}}&sortby=requested_days" hx-target="#userRequest">{% trans "Requested Days" %}</div>
+                    <div class="oh-sticky-table__th {% if request.sort_option.order == '-requested_hours' %}arrow-up {% elif request.sort_option.order == 'requested_hours' %}arrow-down {% else %}arrow-up-down {% endif %}" hx-get="{% url 'user-request-filter' %}?{{pd}}&sortby=requested_hours" hx-target="#userRequest">{% trans "Requested Hours" %}</div>
                     <div class="oh-sticky-table__th {% if request.sort_option.order == '-status' %}arrow-up {% elif request.sort_option.order == 'status' %}arrow-down {% else %}arrow-up-down {% endif %}" hx-get="{% url 'user-request-filter' %}?{{pd}}&sortby=status" hx-target="#userRequest">{% trans "Status" %}</div>
                     <div class="oh-sticky-table__th" style="width:115px;">{% trans "Comment" %}</div>
                     <div class="oh-sticky-table__th">{% trans 'Confirmation' %}</div>
@@ -113,9 +114,34 @@
                             {% endif %}
                         </div>
                     </div>
-                    <div class="oh-sticky-table__td {% if leave_request.status == 'rejected' %} diff-cell{% endif %} dateformat_changer"> {{leave_request.start_date}}</div>
-                    <div class="oh-sticky-table__td {% if leave_request.status == 'rejected' %} diff-cell{% endif %} dateformat_changer">{{leave_request.end_date}}</div>
-                    <div class="oh-sticky-table__td {% if leave_request.status == 'rejected' %} diff-cell{% endif %}">{{leave_request.requested_days}}</div>
+                    <div class="oh-sticky-table__td {% if leave_request.status == 'rejected' %} diff-cell{% endif %} dateformat_changer">
+                        {{leave_request.start_date}}
+                        {% if leave_request.leave_type_id.is_hourly_leave and leave_request.start_time %}
+                            <br><small>{{leave_request.start_time|time:"H:i"}}</small>
+                        {% endif %}
+                    </div>
+                    <div class="oh-sticky-table__td {% if leave_request.status == 'rejected' %} diff-cell{% endif %} dateformat_changer">
+                        {% if leave_request.leave_type_id.is_hourly_leave and leave_request.end_time %}
+                            {{leave_request.start_date}}
+                            <br><small>{{leave_request.end_time|time:"H:i"}}</small>
+                        {% else %}
+                            {{leave_request.end_date}}
+                        {% endif %}
+                    </div>
+                    <div class="oh-sticky-table__td {% if leave_request.status == 'rejected' %} diff-cell{% endif %}">
+                        {% if leave_request.leave_type_id.is_hourly_leave %}
+                            -
+                        {% else %}
+                            {{leave_request.requested_days}}
+                        {% endif %}
+                    </div>
+                    <div class="oh-sticky-table__td {% if leave_request.status == 'rejected' %} diff-cell{% endif %}">
+                        {% if leave_request.leave_type_id.is_hourly_leave %}
+                            {{leave_request.requested_hours}}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
                     <div class="oh-sticky-table__td {% if leave_request.status == 'rejected' %} diff-cell{% endif %}">
                         {% if leave_request.multiple_approvals and leave_request.status == "requested" %}
                             <div class="oh-checkpoint-badge oh-checkpoint-badge--secondary" title="{% for manager in leave_request.multiple_approvals.managers %}{{ manager }}{% if not forloop.last %} , {% endif %}{% endfor %}">

@@ -13,6 +13,7 @@
                     <div class="oh-sticky-table__th" >{% trans "Start Date" %}</div>
                     <div class="oh-sticky-table__th" >{% trans "End Date" %}</div>
                     <div class="oh-sticky-table__th" >{% trans "Requested Days" %}</div>
+                    <div class="oh-sticky-table__th" >{% trans "Requested Hours" %}</div>
                     <div class="oh-sticky-table__th" >{% trans "Status" %}</div>
                 </div>
             </div>
@@ -31,9 +32,34 @@
                         </div>
                     </div>
                     <div class="oh-sticky-table__td">{{leave_request.leave_type_id}}</div>
-                    <div class="oh-sticky-table__td dateformat_changer">{{leave_request.start_date}}</div>
-                    <div class="oh-sticky-table__td dateformat_changer">{{leave_request.end_date}}</div>
-                    <div class="oh-sticky-table__td" align="center">{{leave_request.requested_days}}</div>
+                    <div class="oh-sticky-table__td dateformat_changer">
+                        {{leave_request.start_date}}
+                        {% if leave_request.leave_type_id.is_hourly_leave and leave_request.start_time %}
+                            <br><small>{{leave_request.start_time|time:"H:i"}}</small>
+                        {% endif %}
+                    </div>
+                    <div class="oh-sticky-table__td dateformat_changer">
+                        {% if leave_request.leave_type_id.is_hourly_leave and leave_request.end_time %}
+                            {{leave_request.start_date}}
+                            <br><small>{{leave_request.end_time|time:"H:i"}}</small>
+                        {% else %}
+                            {{leave_request.end_date}}
+                        {% endif %}
+                    </div>
+                    <div class="oh-sticky-table__td" align="center">
+                        {% if leave_request.leave_type_id.is_hourly_leave %}
+                            -
+                        {% else %}
+                            {{leave_request.requested_days}}
+                        {% endif %}
+                    </div>
+                    <div class="oh-sticky-table__td" align="center">
+                        {% if leave_request.leave_type_id.is_hourly_leave %}
+                            {{leave_request.requested_hours}}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
                     <div class="oh-sticky-table__td">
                       {% if leave_request.multiple_approvals and leave_request.status == "requested" %}
                         <div class="oh-checkpoint-badge oh-checkpoint-badge--secondary" title="{% for manager in leave_request.multiple_approvals.managers %}{{ manager }}{% if not forloop.last %} , {% endif %}{% endfor %}">

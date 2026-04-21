@@ -65,7 +65,7 @@
                     </div>
                     <div class="col-sm-12 col-md-12 col-lg-12 totalDaysContainer">
                         <div class="oh-input-group">
-                            <label for="" class="oh-label">{% trans "Total Days" %}</label>
+                            <label for="" class="oh-label totalDaysLabel">{% trans "Total Days" %}</label>
                             {{form.count}}
                             {{form.count.errors}}
                         </div>
@@ -245,6 +245,28 @@
                             </div>
                         </div>
                     </div>
+                    <div class="col-sm-12 col-md-12 col-lg-6">
+                        <div class="oh-input-group oh-label__info justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <label for="" class="oh-label">{{ form.is_hourly_leave.label }}</label>
+                                <span class=" oh-info me-3"
+                                    title="{% trans 'Enable hourly leave - employees can request leave in hours instead of days.' %}"></span>
+                            </div>
+                            <div class="oh-switch p-3">
+                                {{form.is_hourly_leave}}
+                                {{form.is_hourly_leave.errors}}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-12 col-md-12 col-lg-6 hourlyLeaveContainer" style="display:none;">
+                        <div class="oh-input-group">
+                            <label for="" class="oh-label">{{ form.hours_per_day.label }}</label>
+                            <span class="oh-info me-3"
+                                title="{% trans 'Working hours per day. Used to convert hourly leave to day equivalents.' %}"></span>
+                            {{form.hours_per_day}}
+                            {{form.hours_per_day.errors}}
+                        </div>
+                    </div>
                     {% if perms.leave.add_availableleave %}
                         <div class="col-sm-12 col-md-12">
                             <div class="oh-input-group oh-label__info">
@@ -358,6 +380,31 @@
                 : (totalDaysContainer.hide(), resetContainer.hide());
         });
 
+        // Hourly leave toggle
+        var isHourlyLeave = $("#id_is_hourly_leave");
+        var hourlyLeaveContainer = $(".hourlyLeaveContainer");
+        var totalDaysLabelEl = $(".totalDaysLabel");
+        var periodInField = $("#id_period_in").closest(".col-sm-12");
+
+        function toggleHourlyLeaveType(checked) {
+            if (checked) {
+                hourlyLeaveContainer.show();
+                totalDaysLabelEl.text("{% trans 'Total Hours' %}");
+                periodInField.hide();
+                // For hourly leave, period_in should be "day" and total_days = count
+                $("#id_period_in").val("day");
+                $("#id_total_days").val($("#id_count").val());
+            } else {
+                hourlyLeaveContainer.hide();
+                totalDaysLabelEl.text("{% trans 'Total Days' %}");
+                periodInField.show();
+            }
+        }
+
+        isHourlyLeave.change(function () {
+            toggleHourlyLeaveType(this.checked);
+        });
+
         // Check value of boolean change field and trigger action
         reset_based.change(function (e) {
             var value = $(this).val();
@@ -462,21 +509,26 @@
 
         // leave total days calculation
         $("#id_period_in, #id_count").change(function () {
-            const month = 30;
-            const year = 365;
-            const day = 1;
-            var totalDays = 0;
-            var unit = $("#id_period_in").val();
-            var count = $("#id_count").val();
+            if (isHourlyLeave.is(":checked")) {
+                // For hourly leave, total_days = count (hours directly)
+                $("#id_total_days").val($("#id_count").val());
+            } else {
+                const month = 30;
+                const year = 365;
+                const day = 1;
+                var totalDays = 0;
+                var unit = $("#id_period_in").val();
+                var count = $("#id_count").val();
 
-            if (unit == "day") {
-                totalDays = day * count;
-            } else if (unit == "month") {
-                totalDays = month * count;
-            } else if (unit == "year") {
-                totalDays = year * count;
+                if (unit == "day") {
+                    totalDays = day * count;
+                } else if (unit == "month") {
+                    totalDays = month * count;
+                } else if (unit == "year") {
+                    totalDays = year * count;
+                }
+                $("#id_total_days").val(totalDays);
             }
-            $("#id_total_days").val(totalDays);
         });
     });
 

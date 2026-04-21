@@ -542,13 +542,42 @@ class Attendance(HorillaModel):
         else:
             approved_leave_requests = []
 
-        # Create exclude condition using Q objects
+        # Separate hourly leave requests from full-day leave requests
+        hourly_leave_by_date = {}
         exclude_condition = Q()
         if approved_leave_requests:
-            # Combine multiple conditions for the exclude clause
             for leave in approved_leave_requests:
-                exclude_condition |= Q(
-                    attendance_date__range=(leave.start_date, leave.end_date)
+                if (
+                    hasattr(leave.leave_type_id, "is_hourly_leave")
+                    and leave.leave_type_id.is_hourly_leave
+                    and leave.requested_hours
+                ):
+                    # Accumulate hourly leave seconds per date
+                    leave_date = leave.start_date
+                    hourly_seconds = int(leave.requested_hours * 3600)
+                    hourly_leave_by_date[leave_date] = (
+                        hourly_leave_by_date.get(leave_date, 0) + hourly_seconds
+                    )
+                else:
+                    # Full-day leave: exclude entire day as before
+                    exclude_condition |= Q(
+                        attendance_date__range=(leave.start_date, leave.end_date)
+                    )
+
+        # Also collect hourly leaves for the entire month (not just today)
+        if apps.is_installed("leave"):
+            month_hourly_leaves = self.employee_id.leaverequest_set.filter(
+                start_date__month=self.attendance_date.month,
+                start_date__year=self.attendance_date.year,
+                status="approved",
+                leave_type_id__is_hourly_leave=True,
+                requested_hours__gt=0,
+            )
+            for leave in month_hourly_leaves:
+                leave_date = leave.start_date
+                hourly_seconds = int(leave.requested_hours * 3600)
+                hourly_leave_by_date[leave_date] = (
+                    hourly_leave_by_date.get(leave_date, 0) + hourly_seconds
                 )
 
         # Filter month attendances in a single query
@@ -560,7 +589,7 @@ class Attendance(HorillaModel):
                 attendance_validated=True,
             )
             .exclude(exclude_condition)
-            .values("minimum_hour", "at_work_second")
+            .values("minimum_hour", "at_work_second", "attendance_date")
         )
 
         # Calculate hour balance and hours pending in a single loop
@@ -568,6 +597,12 @@ class Attendance(HorillaModel):
         minimum_hour_second = 0
         for attendance in month_attendances:
             required_work_second = strtime_seconds(attendance["minimum_hour"])
+            # Reduce minimum hour by hourly leave taken on this date
+            att_date = attendance["attendance_date"]
+            if att_date in hourly_leave_by_date:
+                required_work_second = max(
+                    0, required_work_second - hourly_leave_by_date[att_date]
+                )
             at_work_second = min(required_work_second, attendance["at_work_second"])
             hour_balance += at_work_second
             minimum_hour_second += required_work_second

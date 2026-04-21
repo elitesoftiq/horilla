@@ -32,7 +32,7 @@
                 width: 35%;
             "
         >
-            {% trans "Available Leaves" %} : {{ total_leave_days }}
+            {% if is_hourly %}{% trans "Available Hours" %}{% else %}{% trans "Available Leaves" %}{% endif %} : {{ total_leave_days }}
         </div>
     {% else %}
         <div
@@ -47,7 +47,7 @@
                 display: flex;
             "
         >
-            {% trans "Available Leaves" %} : {{ total_leave_days }}
+            {% if is_hourly %}{% trans "Available Hours" %}{% else %}{% trans "Available Leaves" %}{% endif %} : {{ total_leave_days }}
             {% if forcasted_days and forcasted_days > 0 %}
                 <img
                     style="width: 20px; height: 20px; cursor: pointer"

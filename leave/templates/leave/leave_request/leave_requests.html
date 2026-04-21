@@ -91,6 +91,10 @@
                         hx-get="{% url 'request-filter' %}?{{pd}}&sortby=requested_days" hx-target="#leaveRequest">
                         {% trans "Requested Days" %}
                     </div>
+                    <div class="oh-sticky-table__th {% if request.sort_option.order == '-requested_hours' %}arrow-up {% elif request.sort_option.order == 'requested_hours' %}arrow-down {% else %}arrow-up-down {% endif %}"
+                        hx-get="{% url 'request-filter' %}?{{pd}}&sortby=requested_hours" hx-target="#leaveRequest">
+                        {% trans "Requested Hours" %}
+                    </div>
                     <div class="oh-sticky-table__th" style="width:115px;">{% trans "Leave Clash" %}</div>
                     <div class="oh-sticky-table__th {% if request.sort_option.order == '-status' %}arrow-up {% elif request.sort_option.order == 'status' %}arrow-down {% else %}arrow-up-down {% endif %}"
                         hx-get="{% url 'request-filter' %}?{{pd}}&sortby=status" hx-target="#leaveRequest">
@@ -147,9 +151,34 @@
                             </div>
                         </div>
                         <div class="oh-sticky-table__td">{{leave_request.leave_type_id}}</div>
-                        <div class="oh-sticky-table__td dateformat_changer">{{leave_request.start_date}}</div>
-                        <div class="oh-sticky-table__td dateformat_changer">{{leave_request.end_date}}</div>
-                        <div class="oh-sticky-table__td">{{leave_request.requested_days}}</div>
+                        <div class="oh-sticky-table__td dateformat_changer">
+                            {{leave_request.start_date}}
+                            {% if leave_request.leave_type_id.is_hourly_leave and leave_request.start_time %}
+                                <br><small>{{leave_request.start_time|time:"H:i"}}</small>
+                            {% endif %}
+                        </div>
+                        <div class="oh-sticky-table__td dateformat_changer">
+                            {% if leave_request.leave_type_id.is_hourly_leave and leave_request.end_time %}
+                                {{leave_request.start_date}}
+                                <br><small>{{leave_request.end_time|time:"H:i"}}</small>
+                            {% else %}
+                                {{leave_request.end_date}}
+                            {% endif %}
+                        </div>
+                        <div class="oh-sticky-table__td">
+                            {% if leave_request.leave_type_id.is_hourly_leave %}
+                                -
+                            {% else %}
+                                {{leave_request.requested_days}}
+                            {% endif %}
+                        </div>
+                        <div class="oh-sticky-table__td">
+                            {% if leave_request.leave_type_id.is_hourly_leave %}
+                                {{leave_request.requested_hours}}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
                         <div class="oh-sticky-table__td" onclick="event.stopPropagation()">
                             <div class="d-flex" style="justify-content:center;" data-target="#clashViewModal"
                                 data-toggle="oh-modal-toggle"

@@ -59,16 +59,16 @@
                     {% trans "Leave Type" %}
                   </div>
                   <div class="oh-sticky-table__th">
-                    {% trans "Available Days" %}
+                    {% trans "Available Days / Hours" %}
                   </div>
                   <div class="oh-sticky-table__th">
-                    {% trans "Carryforward Days" %}
+                    {% trans "Carryforward Days / Hours" %}
                   </div>
                   <div class="oh-sticky-table__th">
-                    {% trans "Total Leave Days" %}
+                    {% trans "Total Leave Days / Hours" %}
                   </div>
                   <div class="oh-sticky-table__th">
-                    {% trans "Used Leave Days" %}
+                    {% trans "Used Leave Days / Hours" %}
                   </div>
                   <div class="oh-sticky-table__th">
                     {% trans "Assigned Date" %}
@@ -118,23 +118,23 @@
                   </div>
                   <div class="oh-sticky-table__td">
                     {% if available_leave.leave_type_id.limit_leave %}
-                      {{available_leave.available_days}}
+                      {{available_leave.available_days}}{% if available_leave.leave_type_id.is_hourly_leave %} {% trans "hrs" %}{% endif %}
                     {% else %}
                       {% trans "No Limit" %}
                     {% endif %}
                   </div>
                   <div class="oh-sticky-table__td">
-                    {{available_leave.carryforward_days}}
+                    {{available_leave.carryforward_days}}{% if available_leave.leave_type_id.is_hourly_leave %} {% trans "hrs" %}{% endif %}
                   </div>
                   <div class="oh-sticky-table__td">
                     {% if available_leave.leave_type_id.limit_leave %}
-                      {{available_leave.total_leave_days}}
+                      {{available_leave.total_leave_days}}{% if available_leave.leave_type_id.is_hourly_leave %} {% trans "hrs" %}{% endif %}
                     {% else %}
                       {% trans "No Limit" %}
                     {% endif %}
                   </div>
                   <div class="oh-sticky-table__td">
-                    {{available_leave.leave_taken}}
+                    {{available_leave.leave_taken}}{% if available_leave.leave_type_id.is_hourly_leave %} {% trans "hrs" %}{% endif %}
                   </div>
                   <div class="oh-sticky-table__td dateformat_changer">
                     {{available_leave.assigned_date}}

@@ -149,6 +149,12 @@ class LeaveTypeForm(ConditionForm):
             cleaned_data["reset_month"] = "1"
             cleaned_data["reset_day"] = "1"
 
+        # Validate hours_per_day when hourly leave is enabled
+        if cleaned_data.get("is_hourly_leave"):
+            hours_per_day = cleaned_data.get("hours_per_day")
+            if not hours_per_day or hours_per_day <= 0:
+                cleaned_data["hours_per_day"] = 8
+
         return cleaned_data
 
     def save(self, *args, **kwargs):
@@ -265,9 +271,19 @@ class LeaveRequestCreationForm(BaseModelForm):
             "start_date_breakdown",
             "end_date",
             "end_date_breakdown",
+            "start_time",
+            "end_time",
             "attachment",
             "description",
         ]
+        widgets = {
+            "start_time": forms.TimeInput(
+                attrs={"type": "time", "class": "oh-input w-100"}
+            ),
+            "end_time": forms.TimeInput(
+                attrs={"type": "time", "class": "oh-input w-100"}
+            ),
+        }
 
 
 class LeaveRequestUpdationForm(BaseModelForm):
@@ -337,9 +353,19 @@ class LeaveRequestUpdationForm(BaseModelForm):
             "start_date_breakdown",
             "end_date",
             "end_date_breakdown",
+            "start_time",
+            "end_time",
             "attachment",
             "description",
         ]
+        widgets = {
+            "start_time": forms.TimeInput(
+                attrs={"type": "time", "class": "oh-input w-100"}
+            ),
+            "end_time": forms.TimeInput(
+                attrs={"type": "time", "class": "oh-input w-100"}
+            ),
+        }
 
 
 class AvailableLeaveForm(BaseModelForm):
@@ -470,11 +496,19 @@ class UserLeaveRequestForm(BaseModelForm):
             "start_date_breakdown",
             "end_date",
             "end_date_breakdown",
+            "start_time",
+            "end_time",
             "attachment",
             "description",
         ]
         widgets = {
             "employee_id": forms.HiddenInput(),
+            "start_time": forms.TimeInput(
+                attrs={"type": "time", "class": "oh-input w-100"}
+            ),
+            "end_time": forms.TimeInput(
+                attrs={"type": "time", "class": "oh-input w-100"}
+            ),
         }
 
 
@@ -591,6 +625,8 @@ class UserLeaveRequestCreationForm(BaseModelForm):
             "start_date_breakdown",
             "end_date",
             "end_date_breakdown",
+            "start_time",
+            "end_time",
             "attachment",
             "description",
             "requested_days",
@@ -598,6 +634,12 @@ class UserLeaveRequestCreationForm(BaseModelForm):
         widgets = {
             "employee_id": forms.HiddenInput(),
             "requested_days": forms.HiddenInput(),
+            "start_time": forms.TimeInput(
+                attrs={"type": "time", "class": "oh-input w-100"}
+            ),
+            "end_time": forms.TimeInput(
+                attrs={"type": "time", "class": "oh-input w-100"}
+            ),
         }
 
 

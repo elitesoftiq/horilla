@@ -22,11 +22,25 @@ def attendance_post_save(sender, instance, **kwargs):
     min_hour_second = strtime_seconds(instance.minimum_hour)
     at_work_second = strtime_seconds(instance.attendance_worked_hour)
 
+    # Adjust minimum hour for hourly leave on this date
+    hourly_leave_seconds = 0
+    if apps.is_installed("leave"):
+        hourly_leaves = instance.employee_id.leaverequest_set.filter(
+            start_date=instance.attendance_date,
+            status="approved",
+            leave_type_id__is_hourly_leave=True,
+            requested_hours__gt=0,
+        )
+        for leave in hourly_leaves:
+            hourly_leave_seconds += int(leave.requested_hours * 3600)
+
+    effective_min_hour = max(0, min_hour_second - hourly_leave_seconds)
+
     if not instance.attendance_validated:
         status, message = "CONF", _("Validate the attendance")
-    elif at_work_second >= min_hour_second:
+    elif at_work_second >= effective_min_hour:
         status, message = "FDP", _("Present")
-    elif at_work_second >= min_hour_second / 2:
+    elif at_work_second >= effective_min_hour / 2:
         status, message = "HDP", _("Incomplete minimum hour")
     else:
         status, message = "ABS", _("Incomplete half minimum hour")
@@ -58,9 +72,19 @@ def attendance_post_save(sender, instance, **kwargs):
     work_record.shift_id = instance.shift_id
 
     if instance.attendance_validated:
-        work_record.day_percentage = (
-            1.00 if at_work_second > min_hour_second / 2 else 0.50
-        )
+        if hourly_leave_seconds > 0 and min_hour_second > 0:
+            # Proportional day percentage accounting for hourly leave
+            leave_fraction = hourly_leave_seconds / min_hour_second
+            work_fraction = max(0, 1.0 - leave_fraction)
+            work_record.day_percentage = round(work_fraction, 2)
+        else:
+            work_record.day_percentage = (
+                1.00 if at_work_second > min_hour_second / 2 else 0.50
+            )
+
+    if hourly_leave_seconds > 0:
+        leave_hours = round(hourly_leave_seconds / 3600, 1)
+        message = _("%(hours)sh hourly leave applied") % {"hours": leave_hours}
 
     if work_record.is_leave_record:
         message = (

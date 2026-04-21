@@ -18,6 +18,69 @@
     </form>
 </div>
 
+<script>
+    // Hourly leave toggle for leave request form
+    function setupHourlyLeaveToggle(formId) {
+        var form = $("#" + formId);
+        var leaveTypeField = form.find("[name=leave_type_id]");
+
+        function toggleHourlyFields(isHourly) {
+            var startBreakdown = form.find("[name=start_date_breakdown]").closest(".oh-input-group").parent();
+            var endDate = form.find("[name=end_date]").closest(".oh-input-group").parent();
+            var endBreakdown = form.find("[name=end_date_breakdown]").closest(".oh-input-group").parent();
+            var startTime = form.find("[name=start_time]").closest(".oh-input-group").parent();
+            var endTime = form.find("[name=end_time]").closest(".oh-input-group").parent();
+
+            if (isHourly) {
+                startBreakdown.hide();
+                endDate.hide();
+                endBreakdown.hide();
+                startTime.show();
+                endTime.show();
+                form.find("[name=start_date_breakdown]").prop("required", false);
+                form.find("[name=end_date]").prop("required", false);
+                form.find("[name=end_date_breakdown]").prop("required", false);
+                form.find("[name=start_time]").prop("required", true);
+                form.find("[name=end_time]").prop("required", true);
+            } else {
+                startBreakdown.show();
+                endDate.show();
+                endBreakdown.show();
+                startTime.hide();
+                endTime.hide();
+                form.find("[name=start_time]").prop("required", false);
+                form.find("[name=end_time]").prop("required", false);
+            }
+        }
+
+        function checkLeaveType() {
+            var leaveTypeId = leaveTypeField.val();
+            if (leaveTypeId) {
+                $.ajax({
+                    url: "/leave/check-hourly-leave-type",
+                    data: { leave_type_id: leaveTypeId },
+                    success: function(data) {
+                        toggleHourlyFields(data.is_hourly);
+                    }
+                });
+            } else {
+                toggleHourlyFields(false);
+            }
+        }
+
+        leaveTypeField.on("change", function() {
+            setTimeout(checkLeaveType, 300);
+        });
+
+        // Initial check
+        setTimeout(checkLeaveType, 500);
+    }
+
+    $(document).ready(function() {
+        setupHourlyLeaveToggle("leaveRequestCreateForm");
+    });
+</script>
+
 {% if "recruitment"|app_installed %}
 <script>
     $("#leaveRequestCreateForm [type=submit]").hide();
