@@ -1160,3 +1160,240 @@ class HybridAttendanceViolation(HorillaModel):
     @property
     def shortage(self):
         return max(0, self.required_office_days - self.actual_office_days)
+
+    @property
+    def next_week_start_date(self):
+        return (
+            self.week_start_date + timedelta(days=7) if self.week_start_date else None
+        )
+
+
+class AttendancePolicy(HorillaModel):
+    """
+    Standalone attendance policy that defines how many office days per week
+    an employee is required to attend.  Decoupled from the shift schedule so
+    that "when to work" (shift) and "how often to attend" (policy) are
+    managed independently.
+    """
+
+    name = models.CharField(max_length=100, verbose_name=_("Policy Name"))
+    description = models.TextField(
+        null=True, blank=True, verbose_name=_("Description")
+    )
+    required_days_per_week = models.PositiveSmallIntegerField(
+        verbose_name=_("Required Days Per Week"),
+        help_text=_(
+            "Minimum number of office-attendance days required per week (1-7)."
+        ),
+    )
+    company_id = models.ManyToManyField(
+        Company, blank=True, verbose_name=_("Company")
+    )
+    is_active = models.BooleanField(default=True, verbose_name=_("Active"))
+    objects = HorillaCompanyManager()
+    history = HorillaAuditLog(
+        related_name="attendance_policy_history",
+        bases=[
+            HorillaAuditInfo,
+        ],
+    )
+
+    class Meta:
+        verbose_name = _("Attendance Policy")
+        verbose_name_plural = _("Attendance Policies")
+        ordering = ["name"]
+
+    def clean(self):
+        super().clean()
+        if (
+            self.required_days_per_week is not None
+            and not 1 <= self.required_days_per_week <= 7
+        ):
+            raise ValidationError(
+                _("Required days per week must be between 1 and 7.")
+            )
+
+    def __str__(self):
+        return f"{self.name} ({self.required_days_per_week} days/week)"
+
+
+class AttendancePolicyViolation(HorillaModel):
+    """
+    Tracks weekly attendance-policy compliance violations.
+    Created by the scheduler every Monday for employees who did not meet
+    their policy's required office days in the previous week.
+    """
+
+    employee_id = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="policy_violations",
+        verbose_name=_("Employee"),
+    )
+    policy_id = models.ForeignKey(
+        AttendancePolicy,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("Policy"),
+    )
+    week_start_date = models.DateField(verbose_name=_("Week Start Date"))
+    required_days = models.PositiveSmallIntegerField(
+        verbose_name=_("Required Days"),
+    )
+    actual_days = models.PositiveSmallIntegerField(
+        default=0, verbose_name=_("Actual Days")
+    )
+    is_resolved = models.BooleanField(default=False, verbose_name=_("Resolved"))
+    resolved_by = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_policy_violations",
+        verbose_name=_("Resolved By"),
+        editable=False,
+    )
+    note = models.TextField(
+        null=True, blank=True, verbose_name=_("Note"), max_length=255
+    )
+    objects = HorillaCompanyManager(
+        related_company_field="employee_id__employee_work_info__company_id"
+    )
+
+    class Meta:
+        verbose_name = _("Attendance Policy Violation")
+        verbose_name_plural = _("Attendance Policy Violations")
+        unique_together = [("employee_id", "week_start_date")]
+        ordering = ["-week_start_date", "employee_id__employee_first_name"]
+        permissions = [
+            (
+                "resolve_attendancepolicyviolation",
+                "Resolve Attendance Policy Violation",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.employee_id} — week of {self.week_start_date} "
+            f"({self.actual_days}/{self.required_days} office days)"
+        )
+
+    @property
+    def shortage(self):
+        return max(0, self.required_days - self.actual_days)
+
+    @property
+    def next_week_start_date(self):
+        return (
+            self.week_start_date + timedelta(days=7) if self.week_start_date else None
+        )
+
+
+class AttendanceShiftRequest(HorillaModel):
+    """
+    Separate request record for carrying one missed office day into next week.
+    """
+
+    class RequestKind(models.TextChoices):
+        HYBRID = "hybrid", _("Hybrid")
+        POLICY = "policy", _("Attendance Policy")
+
+    employee_id = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="attendance_shift_requests",
+        verbose_name=_("Employee"),
+    )
+    request_kind = models.CharField(
+        max_length=20,
+        choices=RequestKind.choices,
+        verbose_name=_("Request Type"),
+    )
+    from_week_start_date = models.DateField(verbose_name=_("From Week Start Date"))
+    to_week_start_date = models.DateField(verbose_name=_("To Week Start Date"))
+    requested_days = models.PositiveSmallIntegerField(
+        default=1, verbose_name=_("Requested Days")
+    )
+    description = models.TextField(
+        null=True, blank=True, verbose_name=_("Description")
+    )
+    canceled = models.BooleanField(default=False, verbose_name=_("Canceled"))
+    hybrid_violation_id = models.ForeignKey(
+        "attendance.HybridAttendanceViolation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="shift_requests",
+        verbose_name=_("Hybrid Violation"),
+    )
+    policy_violation_id = models.ForeignKey(
+        "attendance.AttendancePolicyViolation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="shift_requests",
+        verbose_name=_("Policy Violation"),
+    )
+    objects = HorillaCompanyManager(
+        related_company_field="employee_id__employee_work_info__company_id"
+    )
+
+    class Meta:
+        verbose_name = _("Attendance Shift Request")
+        verbose_name_plural = _("Attendance Shift Requests")
+        ordering = ["-from_week_start_date", "-id"]
+
+    @staticmethod
+    def get_current_week_start(reference_date=None):
+        reference_date = reference_date or timezone.localdate()
+        return reference_date - timedelta(days=reference_date.weekday())
+
+    def clean(self):
+        super().clean()
+        current_week_start = self.get_current_week_start()
+        if self.requested_days != 1:
+            raise ValidationError(_("Only one attendance day can be shifted per week."))
+        if self.from_week_start_date != current_week_start:
+            raise ValidationError(
+                _("Attendance shift requests can only be created for the current week.")
+            )
+        if self.to_week_start_date != self.from_week_start_date + timedelta(days=7):
+            raise ValidationError(
+                _("Shift requests can only be created for the next week.")
+            )
+        if AttendanceShiftRequest.objects.filter(
+            employee_id=self.employee_id,
+            canceled=False,
+            from_week_start_date=self.from_week_start_date,
+        ).exclude(id=self.id).exists():
+            raise ValidationError(
+                _("An attendance shift request already exists for this week.")
+            )
+        if AttendanceShiftRequest.objects.filter(
+            employee_id=self.employee_id,
+            canceled=False,
+            to_week_start_date=self.from_week_start_date,
+        ).exclude(id=self.id).exists():
+            raise ValidationError(
+                _(
+                    "A similar attendance shift request already exists from the previous week."
+                )
+            )
+        if self.request_kind == self.RequestKind.HYBRID and self.policy_violation_id:
+            raise ValidationError(
+                _("Hybrid attendance shift requests cannot link policy violations.")
+            )
+        if self.request_kind == self.RequestKind.POLICY and self.hybrid_violation_id:
+            raise ValidationError(
+                _("Policy attendance shift requests cannot link hybrid violations.")
+            )
+
+    def __str__(self):
+        return (
+            f"{self.employee_id} - {self.from_week_start_date} -> "
+            f"{self.to_week_start_date}"
+        )
+
+    def request_status(self):
+        return _("Canceled") if self.canceled else _("Requested")

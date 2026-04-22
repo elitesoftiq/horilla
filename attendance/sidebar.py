@@ -54,6 +54,16 @@ SUBMENUS = [
         "accessibility": "attendance.sidebar.hybrid_accessibility",
     },
     {
+        "menu": _("Attendance Policies"),
+        "redirect": reverse("attendance-policy-view"),
+        "accessibility": "attendance.sidebar.policy_accessibility",
+    },
+    {
+        "menu": _("Policy Violations"),
+        "redirect": reverse("policy-violation-view"),
+        "accessibility": "attendance.sidebar.policy_violation_accessibility",
+    },
+    {
         "menu": _("My Attendances"),
         "redirect": reverse("view-my-attendance"),
     },
@@ -100,6 +110,27 @@ def tracking_accessibility(request, submenu, user_perms, *args, **kwargs):
     Determine if late come/early out tracking is enabled.
     """
     return enable_late_come_early_out_tracking(None).get("tracking")
+
+
+def policy_accessibility(request, submenu, user_perms, *args, **kwargs):
+    """
+    Show Attendance Policies menu to users with view permission or reporting managers.
+    """
+    return request.user.has_perm(
+        "attendance.view_attendancepolicy"
+    ) or is_reportingmanager(request.user)
+
+
+def policy_violation_accessibility(request, submenu, user_perms, *args, **kwargs):
+    """
+    Show Policy Violations menu when attendance policies exist.
+    """
+    from attendance.models import AttendancePolicy
+
+    return (
+        request.user.has_perm("attendance.view_attendancepolicyviolation")
+        or is_reportingmanager(request.user)
+    ) and AttendancePolicy.objects.filter(is_active=True).exists()
 
 
 def hybrid_accessibility(request, submenu, user_perms, *args, **kwargs):

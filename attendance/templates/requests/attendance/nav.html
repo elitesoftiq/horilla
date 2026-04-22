@@ -144,6 +144,11 @@
                 onclick="event.preventDefault()">
                 <ion-icon name="add-sharp" class="mr-1"></ion-icon>{% trans "Create" %}
             </button>
+            <button class="oh-btn ml-2" data-toggle="oh-modal-toggle" data-target="#objectCreateModal"
+                hx-get="{% url 'attendance-shift-request-create' %}" hx-target="#objectCreateModalTarget"
+                onclick="event.preventDefault()">
+                <ion-icon name="arrow-redo-outline" class="mr-1"></ion-icon>{% trans "Shift Request" %}
+            </button>
         </form>
     </div>
 </section>

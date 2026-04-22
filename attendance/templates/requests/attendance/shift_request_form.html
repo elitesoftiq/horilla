@@ -1,0 +1,55 @@
+{% load i18n %}
+<div class="oh-modal__dialog-header">
+    <h2 class="oh-modal__dialog-title">{{ form.verbose_name }}</h2>
+    <button class="oh-modal__close" aria-label="Close">
+        <ion-icon name="close-outline"></ion-icon>
+    </button>
+</div>
+<div class="oh-modal__dialog-body">
+    <form hx-post="{% url 'attendance-shift-request-create' %}" hx-target="#objectCreateModalTarget" class="oh-profile-section">
+        {% csrf_token %}
+        <div class="col-12">{{ form.non_field_errors }}</div>
+        <div class="row">
+            <div class="col-12 col-md-6">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{{ form.employee_id.label }}</label>
+                    {{ form.employee_id }}
+                    {{ form.employee_id.errors }}
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{% trans "Requested Days" %}</label>
+                    <input type="text" class="oh-input w-100" value="1" readonly />
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{% trans "Current Week" %}</label>
+                    <input type="text" class="oh-input w-100 dateformat_changer" value="{{ form.current_week_start }}" readonly />
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{% trans "Shift To Week" %}</label>
+                    <input type="text" class="oh-input w-100 dateformat_changer" value="{{ form.next_week_start }}" readonly />
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{{ form.description.label }}</label>
+                    {{ form.description }}
+                    {{ form.description.errors }}
+                    <small class="text-muted">
+                        {% trans "This request moves one office attendance day from the current week into next week." %}
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="oh-modal__button-container text-center mt-3">
+            <button type="submit" class="oh-btn oh-btn--secondary w-100">
+                {% trans "Request" %}
+            </button>
+        </div>
+    </form>
+</div>

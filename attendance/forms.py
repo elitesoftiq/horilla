@@ -45,6 +45,9 @@ from attendance.models import (
     AttendanceActivity,
     AttendanceLateComeEarlyOut,
     AttendanceOverTime,
+    AttendancePolicy,
+    AttendancePolicyViolation,
+    AttendanceShiftRequest,
     AttendanceRequestComment,
     AttendanceValidationCondition,
     BatchAttendance,
@@ -1278,3 +1281,122 @@ class BatchAttendanceForm(BaseModelForm):
 
         if self.instance.pk:
             self.verbose_name = _("Update attendance batch")
+
+
+class AttendancePolicyForm(BaseModelForm):
+    """
+    Form for creating and editing AttendancePolicy instances.
+    """
+
+    verbose_name = _("Create Attendance Policy")
+
+    class Meta:
+        model = AttendancePolicy
+        fields = "__all__"
+        exclude = ["is_active"]
+
+    def as_p(self, *args, **kwargs):
+        _ = args, kwargs
+        context = {"form": self}
+        return render_to_string("common_form.html", context)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.verbose_name = _("Update Attendance Policy")
+
+
+class AttendancePolicyViolationResolveForm(BaseModelForm):
+    """
+    Form for resolving an AttendancePolicyViolation.
+    """
+
+    verbose_name = _("Resolve Policy Violation")
+
+    class Meta:
+        model = AttendancePolicyViolation
+        fields = ["note"]
+
+
+class AttendanceShiftRequestForm(BaseModelForm):
+    """
+    Advance request to carry one office day from the current week to the next week.
+    """
+
+    verbose_name = _("Create Attendance Shift Request")
+
+    class Meta:
+        model = AttendanceShiftRequest
+        fields = ["employee_id", "description"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = getattr(horilla_middlewares._thread_locals, "request", None)
+        current_week_start = AttendanceShiftRequest.get_current_week_start()
+        next_week_start = current_week_start + datetime.timedelta(days=7)
+        self.current_week_start = current_week_start
+        self.next_week_start = next_week_start
+
+        if request:
+            if request.user.has_perm("attendance.add_attendance") or is_reportingmanager(
+                request
+            ):
+                employees = filtersubordinatesemployeemodel(
+                    request, Employee.objects.all(), perm="attendance.change_attendance"
+                )
+                self.fields["employee_id"].queryset = (
+                    employees | Employee.objects.filter(employee_user_id=request.user)
+                ).distinct()
+            else:
+                self.fields["employee_id"].queryset = Employee.objects.filter(
+                    employee_user_id=request.user
+                )
+                if hasattr(request.user, "employee_get"):
+                    self.fields["employee_id"].initial = request.user.employee_get
+
+        self.fields["description"].required = False
+
+    def clean_employee_id(self):
+        employee = self.cleaned_data["employee_id"]
+        work_info = getattr(employee, "employee_work_info", None)
+        if not work_info:
+            raise ValidationError(_("Employee work info not found."))
+
+        policy = getattr(work_info, "attendance_policy_id", None)
+        shift = getattr(work_info, "shift_id", None)
+        if policy and policy.is_active:
+            self.request_kind = AttendanceShiftRequest.RequestKind.POLICY
+        elif shift and shift.is_hybrid and shift.office_days_per_week:
+            self.request_kind = AttendanceShiftRequest.RequestKind.HYBRID
+        else:
+            raise ValidationError(
+                _(
+                    "Employee must have either an active attendance policy or a hybrid shift to create this request."
+                )
+            )
+        return employee
+
+    def clean(self):
+        cleaned_data = super().clean()
+        employee = cleaned_data.get("employee_id")
+        if not employee or not hasattr(self, "request_kind"):
+            return cleaned_data
+
+        # Populate derived fields before model validation/final save.
+        self.instance.employee_id = employee
+        self.instance.request_kind = self.request_kind
+        self.instance.from_week_start_date = self.current_week_start
+        self.instance.to_week_start_date = self.next_week_start
+        self.instance.requested_days = 1
+        self.instance.hybrid_violation_id = None
+        self.instance.policy_violation_id = None
+        return cleaned_data
+
+    def save(self, commit=True):
+        self.instance.request_kind = self.request_kind
+        self.instance.from_week_start_date = self.current_week_start
+        self.instance.to_week_start_date = self.next_week_start
+        self.instance.requested_days = 1
+        self.instance.hybrid_violation_id = None
+        self.instance.policy_violation_id = None
+        return super().save(commit=commit)

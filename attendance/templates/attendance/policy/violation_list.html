@@ -1,0 +1,165 @@
+{% load i18n %} {% load static %} {% load basefilters %}
+{% include 'filter_tags.html' %}
+{% if messages %}
+<div class="oh-wrapper">
+  {% for message in messages %}
+  <div class="oh-alert-container">
+    <div class="oh-alert oh-alert--animated {{ message.tags }}">{{ message }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if violations %}
+  <div class="oh-table_sticky--wrapper">
+    <div class="oh-sticky-dropdown--header">
+      <div class="oh-dropdown" x-data="{open: false}">
+        <button class="oh-sticky-dropdown_btn" @click="open = !open">
+          <ion-icon name="ellipsis-vertical-sharp"></ion-icon>
+        </button>
+        <div class="oh-dropdown__menu oh-sticky-table_dropdown" x-show="open" @click.outside="open = false">
+          <ul class="oh-dropdown__items" id="PolicyViolationCells"></ul>
+        </div>
+      </div>
+    </div>
+    <div id="policy-violation-table" data-table-name="policy_violation_table">
+      <div class="oh-sticky-table">
+        <div class="oh-sticky-table__table oh-table--sortable">
+          <div class="oh-sticky-table__thead">
+            <div class="oh-sticky-table__tr">
+              <div class="oh-sticky-table__th" style="width: 20px;">
+                <input type="checkbox" title="{% trans 'Select All' %}"
+                  class="oh-input oh-input__checkbox all-policy-violation" />
+              </div>
+              <div class="oh-sticky-table__th">{% trans "Employee" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="1" data-cell-title='{% trans "Week Of" %}'>{% trans "Week Of" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="2" data-cell-title='{% trans "Policy" %}'>{% trans "Policy" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="3" data-cell-title='{% trans "Required" %}'>{% trans "Required" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="4" data-cell-title='{% trans "Actual" %}'>{% trans "Actual" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="5" data-cell-title='{% trans "Shortage" %}'>{% trans "Shortage" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="6" data-cell-title='{% trans "Status" %}'>{% trans "Status" %}</div>
+              {% if request.user|is_reportingmanager or perms.attendance.resolve_attendancepolicyviolation or perms.attendance.delete_attendancepolicyviolation %}
+                <div class="oh-sticky-table__th oh-sticky-table__right">{% trans "Actions" %}</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="oh-sticky-table__tbody">
+            {% for violation in violations %}
+              <div class="oh-sticky-table__tr" draggable="false"
+                data-toggle="oh-modal-toggle" data-target="#policyViolationDetailModal"
+                hx-target="#policyViolationDetailModalTarget"
+                hx-get="{% url 'policy-violation-single-view' violation.id %}?{{ pd }}&instances_ids={{ violation_ids }}">
+                <div class="oh-sticky-table__sd" onclick="event.stopPropagation();">
+                  <input type="checkbox" onchange="highlightRow($(this)); addingPolicyViolationIds();"
+                    id="{{ violation.id }}" class="oh-input oh-input__checkbox all-policy-violation-row" />
+                </div>
+                <div class="oh-sticky-table__td">
+                  <div class="oh-profile oh-profile--md">
+                    <div class="oh-profile__avatar mr-1">
+                      <img src="{{ violation.employee_id.get_avatar }}" class="oh-profile__image" alt="" />
+                    </div>
+                    <span class="oh-profile__name oh-text--dark">{{ violation.employee_id }}</span>
+                  </div>
+                </div>
+                <div data-cell-index="1" class="oh-sticky-table__td dateformat_changer">{{ violation.week_start_date }}</div>
+                <div data-cell-index="2" class="oh-sticky-table__td">{{ violation.policy_id.name|default:"-" }}</div>
+                <div data-cell-index="3" class="oh-sticky-table__td">{{ violation.required_days }}</div>
+                <div data-cell-index="4" class="oh-sticky-table__td">{{ violation.actual_days }}</div>
+                <div data-cell-index="5" class="oh-sticky-table__td">
+                  <span class="oh-badge oh-badge--danger">{{ violation.shortage }}</span>
+                </div>
+                <div data-cell-index="6" class="oh-sticky-table__td">
+                  {% if violation.is_resolved %}
+                    <span class="oh-badge oh-badge--success">{% trans "Resolved" %}</span>
+                  {% else %}
+                    <span class="oh-badge oh-badge--warning">{% trans "Open" %}</span>
+                  {% endif %}
+                </div>
+                {% if request.user|is_reportingmanager or perms.attendance.resolve_attendancepolicyviolation or perms.attendance.delete_attendancepolicyviolation %}
+                  <div class="oh-sticky-table__td oh-sticky-table__right" onclick="event.stopPropagation();">
+                    <div class="oh-btn-group">
+                      {% if not violation.is_resolved and request.user|is_reportingmanager or perms.attendance.resolve_attendancepolicyviolation %}
+                        <form hx-post="{% url 'policy-violation-resolve' violation.id %}?{{ pd }}"
+                          hx-target="#policyViolationContainer" onclick="event.stopPropagation()">
+                          {% csrf_token %}
+                          <button type="submit" class="oh-btn oh-btn--success-outline oh-btn--light-bkg"
+                            title="{% trans 'Mark Resolved' %}">
+                            <ion-icon name="checkmark-circle-outline"></ion-icon>
+                          </button>
+                        </form>
+                      {% endif %}
+                      {% if perms.attendance.delete_attendancepolicyviolation %}
+                        <form hx-confirm="{% trans 'Delete this violation record?' %}"
+                          hx-post="{% url 'policy-violation-delete' violation.id %}?{{ pd }}"
+                          hx-target="#policyViolationContainer" onclick="event.stopPropagation()">
+                          {% csrf_token %}
+                          <button type="submit" class="oh-btn oh-btn--danger-outline oh-btn--light-bkg"
+                            title="{% trans 'Delete' %}">
+                            <ion-icon name="trash-outline"></ion-icon>
+                          </button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="oh-pagination">
+    <span class="oh-pagination__page">
+      {% trans "Page" %} {{ violations.number }} {% trans "of" %} {{ violations.paginator.num_pages }}.
+    </span>
+    <nav class="oh-pagination__nav">
+      <div class="oh-pagination__input-container me-3">
+        <span class="oh-pagination__label me-1">{% trans "Page" %}</span>
+        <input type="number" name="page" class="oh-pagination__input" value="{{ violations.number }}"
+          hx-get="{% url 'policy-violation-search' %}?{{ pd }}" hx-target="#policyViolationContainer" min="1" />
+        <span class="oh-pagination__label">{% trans "of" %} {{ violations.paginator.num_pages }}</span>
+      </div>
+      <ul class="oh-pagination__items">
+        {% if violations.has_previous %}
+          <li class="oh-pagination__item oh-pagination__item--wide">
+            <a hx-target="#policyViolationContainer"
+              hx-get="{% url 'policy-violation-search' %}?{{ pd }}&page=1"
+              class="oh-pagination__link">{% trans "First" %}</a>
+          </li>
+          <li class="oh-pagination__item oh-pagination__item--wide">
+            <a hx-target="#policyViolationContainer"
+              hx-get="{% url 'policy-violation-search' %}?{{ pd }}&page={{ violations.previous_page_number }}"
+              class="oh-pagination__link">{% trans "Previous" %}</a>
+          </li>
+        {% endif %}
+        {% if violations.has_next %}
+          <li class="oh-pagination__item oh-pagination__item--wide">
+            <a hx-target="#policyViolationContainer"
+              hx-get="{% url 'policy-violation-search' %}?{{ pd }}&page={{ violations.next_page_number }}"
+              class="oh-pagination__link">{% trans "Next" %}</a>
+          </li>
+          <li class="oh-pagination__item oh-pagination__item--wide">
+            <a hx-target="#policyViolationContainer"
+              hx-get="{% url 'policy-violation-search' %}?{{ pd }}&page={{ violations.paginator.num_pages }}"
+              class="oh-pagination__link">{% trans "Last" %}</a>
+          </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+
+  <script>
+    toggleColumns("policy-violation-table", "PolicyViolationCells");
+    $(".all-policy-violation").change(function () {
+      $(".all-policy-violation-row").prop("checked", $(this).prop("checked")).change();
+    });
+  </script>
+
+{% else %}
+  <div class="oh-404">
+    <img style="width: 150px; height: 150px" src="{% static 'images/ui/no-results.png' %}"
+      class="oh-404__image mb-4" />
+    <h5 class="oh-404__subtitle">{% trans "No attendance policy violations found." %}</h5>
+  </div>
+{% endif %}

@@ -1,0 +1,132 @@
+{% load i18n %} {% load static %} {% load basefilters %}
+{% include 'filter_tags.html' %}
+{% if messages %}
+<div class="oh-wrapper">
+  {% for message in messages %}
+  <div class="oh-alert-container">
+    <div class="oh-alert oh-alert--animated {{ message.tags }}">{{ message }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if policies %}
+  <div class="oh-table_sticky--wrapper">
+    <div id="attendance-policy-table" data-table-name="attendance_policy_table">
+      <div class="oh-sticky-table">
+        <div class="oh-sticky-table__table oh-table--sortable">
+          <div class="oh-sticky-table__thead">
+            <div class="oh-sticky-table__tr">
+              <div class="oh-sticky-table__th">{% trans "Name" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="1" data-cell-title='{% trans "Required Days/Week" %}'>{% trans "Required Days/Week" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="2" data-cell-title='{% trans "Assigned Employees" %}'>{% trans "Assigned Employees" %}</div>
+              <div class="oh-sticky-table__th" data-cell-index="3" data-cell-title='{% trans "Status" %}'>{% trans "Status" %}</div>
+              {% if perms.attendance.change_attendancepolicy or perms.attendance.delete_attendancepolicy %}
+                <div class="oh-sticky-table__th oh-sticky-table__right">{% trans "Actions" %}</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="oh-sticky-table__tbody">
+            {% for policy in policies %}
+              <div class="oh-sticky-table__tr" draggable="false">
+                <div class="oh-sticky-table__td">
+                  <span class="oh-text--dark fw-bold">{{ policy.name }}</span>
+                  {% if policy.description %}
+                    <small class="text-muted d-block">{{ policy.description|truncatewords:10 }}</small>
+                  {% endif %}
+                </div>
+                <div data-cell-index="1" class="oh-sticky-table__td">
+                  <span class="oh-badge oh-badge--info">{{ policy.required_days_per_week }}</span>
+                </div>
+                <div data-cell-index="2" class="oh-sticky-table__td">
+                  {{ policy.assigned_employees.count }}
+                </div>
+                <div data-cell-index="3" class="oh-sticky-table__td">
+                  {% if policy.is_active %}
+                    <span class="oh-badge oh-badge--success">{% trans "Active" %}</span>
+                  {% else %}
+                    <span class="oh-badge oh-badge--secondary">{% trans "Inactive" %}</span>
+                  {% endif %}
+                </div>
+                {% if perms.attendance.change_attendancepolicy or perms.attendance.delete_attendancepolicy %}
+                  <div class="oh-sticky-table__td oh-sticky-table__right" onclick="event.stopPropagation();">
+                    <div class="oh-btn-group">
+                      {% if perms.attendance.change_attendancepolicy %}
+                        <button class="oh-btn oh-btn--info-outline oh-btn--light-bkg"
+                          data-toggle="oh-modal-toggle" data-target="#policyFormModal"
+                          hx-get="{% url 'attendance-policy-update' policy.id %}"
+                          hx-target="#policyFormModalTarget"
+                          title="{% trans 'Edit' %}">
+                          <ion-icon name="create-outline"></ion-icon>
+                        </button>
+                      {% endif %}
+                      {% if perms.attendance.delete_attendancepolicy %}
+                        <form hx-confirm="{% trans 'Delete this attendance policy?' %}"
+                          hx-post="{% url 'attendance-policy-delete' policy.id %}"
+                          onclick="event.stopPropagation()">
+                          {% csrf_token %}
+                          <button type="submit" class="oh-btn oh-btn--danger-outline oh-btn--light-bkg"
+                            title="{% trans 'Delete' %}">
+                            <ion-icon name="trash-outline"></ion-icon>
+                          </button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if policies.paginator %}
+  <div class="oh-pagination">
+    <span class="oh-pagination__page">
+      {% trans "Page" %} {{ policies.number }} {% trans "of" %} {{ policies.paginator.num_pages }}.
+    </span>
+    <nav class="oh-pagination__nav">
+      <div class="oh-pagination__input-container me-3">
+        <span class="oh-pagination__label me-1">{% trans "Page" %}</span>
+        <input type="number" name="page" class="oh-pagination__input" value="{{ policies.number }}"
+          hx-get="{% url 'attendance-policy-search' %}?{{ pd }}" hx-target="#policyContainer" min="1" />
+        <span class="oh-pagination__label">{% trans "of" %} {{ policies.paginator.num_pages }}</span>
+      </div>
+      <ul class="oh-pagination__items">
+        {% if policies.has_previous %}
+          <li class="oh-pagination__item oh-pagination__item--wide">
+            <a hx-target="#policyContainer"
+              hx-get="{% url 'attendance-policy-search' %}?{{ pd }}&page=1"
+              class="oh-pagination__link">{% trans "First" %}</a>
+          </li>
+          <li class="oh-pagination__item oh-pagination__item--wide">
+            <a hx-target="#policyContainer"
+              hx-get="{% url 'attendance-policy-search' %}?{{ pd }}&page={{ policies.previous_page_number }}"
+              class="oh-pagination__link">{% trans "Previous" %}</a>
+          </li>
+        {% endif %}
+        {% if policies.has_next %}
+          <li class="oh-pagination__item oh-pagination__item--wide">
+            <a hx-target="#policyContainer"
+              hx-get="{% url 'attendance-policy-search' %}?{{ pd }}&page={{ policies.next_page_number }}"
+              class="oh-pagination__link">{% trans "Next" %}</a>
+          </li>
+          <li class="oh-pagination__item oh-pagination__item--wide">
+            <a hx-target="#policyContainer"
+              hx-get="{% url 'attendance-policy-search' %}?{{ pd }}&page={{ policies.paginator.num_pages }}"
+              class="oh-pagination__link">{% trans "Last" %}</a>
+          </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+
+{% else %}
+  <div class="oh-404">
+    <img style="width: 150px; height: 150px" src="{% static 'images/ui/no-results.png' %}"
+      class="oh-404__image mb-4" />
+    <h5 class="oh-404__subtitle">{% trans "No attendance policies found." %}</h5>
+  </div>
+{% endif %}

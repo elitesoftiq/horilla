@@ -53,6 +53,9 @@
       <li class="oh-tabs__tab" data-target="#tab_2">
         {% trans "All Attendances" %}
       </li>
+      <li class="oh-tabs__tab" data-target="#tab_3">
+        {% trans "Next Week Shift Requests" %}
+      </li>
     </ul>  {% include "requests/attendance/request_lines.html" %}
   </div>
 </div>
@@ -76,7 +79,7 @@
         $(this).addClass('oh-tabs__tab--active');
 
         // Hide all tab content first
-        $('#tab_1, #tab_2').removeClass('oh-tabs__content--active');
+        $('#tab_1, #tab_2, #tab_3').removeClass('oh-tabs__content--active');
 
         // Show the target content
         var target = $(this).data('target');

@@ -18,6 +18,8 @@ from attendance.models import (
     AttendanceActivity,
     AttendanceLateComeEarlyOut,
     AttendanceOverTime,
+    AttendancePolicy,
+    AttendancePolicyViolation,
     HybridAttendanceViolation,
     strtime_seconds,
 )
@@ -718,6 +720,71 @@ class HybridViolationFilters(FilterSet):
             "employee_id__employee_work_info__department_id",
             "employee_id__employee_work_info__company_id",
             "shift_id",
+            "is_resolved",
+        ]
+
+    def __init__(self, data=None, queryset=None, *, request=None, prefix=None):
+        super().__init__(data=data, queryset=queryset, request=request, prefix=prefix)
+        for field in self.form.fields.keys():
+            self.form.fields[field].widget.attrs["id"] = f"{uuid.uuid4()}"
+
+    def filter_by_name(self, queryset, name, value):
+        return queryset.filter(
+            employee_id__employee_first_name__icontains=value
+        ) | queryset.filter(employee_id__employee_last_name__icontains=value)
+
+
+class AttendancePolicyFilter(FilterSet):
+    """
+    Filter set for AttendancePolicy model.
+    """
+
+    search = django_filters.CharFilter(method="filter_by_name")
+
+    class Meta:
+        model = AttendancePolicy
+        fields = [
+            "company_id",
+            "is_active",
+        ]
+
+    def __init__(self, data=None, queryset=None, *, request=None, prefix=None):
+        super().__init__(data=data, queryset=queryset, request=request, prefix=prefix)
+        for field in self.form.fields.keys():
+            self.form.fields[field].widget.attrs["id"] = f"{uuid.uuid4()}"
+
+    def filter_by_name(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
+
+
+class AttendancePolicyViolationFilter(FilterSet):
+    """
+    Filter set for AttendancePolicyViolation model.
+    """
+
+    search = django_filters.CharFilter(method="filter_by_name")
+    employee_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Employee.objects.all(),
+        widget=forms.SelectMultiple(),
+    )
+    week_start_date__gte = django_filters.DateFilter(
+        field_name="week_start_date",
+        lookup_expr="gte",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    week_start_date__lte = django_filters.DateFilter(
+        field_name="week_start_date",
+        lookup_expr="lte",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+
+    class Meta:
+        model = AttendancePolicyViolation
+        fields = [
+            "employee_id",
+            "employee_id__employee_work_info__department_id",
+            "employee_id__employee_work_info__company_id",
+            "policy_id",
             "is_resolved",
         ]
 

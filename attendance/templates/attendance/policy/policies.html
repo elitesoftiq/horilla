@@ -1,0 +1,15 @@
+{% extends 'index.html' %}
+{% load i18n %}
+{% load static %}
+{% block content %}
+{% include 'attendance/policy/nav.html' %}
+<div class="oh-wrapper">
+  <div id="policyContainer">
+    <span hx-get="{% url 'attendance-policy-search' %}" hx-target="#policyContainer" hx-trigger="load"></span>
+  </div>
+</div>
+
+<div class="oh-modal" id="policyFormModal" role="dialog" aria-hidden="true">
+  <div class="oh-modal__dialog" id="policyFormModalTarget" style="max-width: 600px;"></div>
+</div>
+{% endblock %}

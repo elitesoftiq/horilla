@@ -2,12 +2,12 @@
 {% if violation %}
   <div class="oh-modal__dialog-header pb-0">
     <div class="oh-modal__dialog oh-modal__dialog--navigation m-0 p-0">
-      <button hx-get="{% url 'hybrid-violation-single-view' previous_instance %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
-        hx-target="#violationDetailModalTarget" class="oh-modal__diaglog-nav oh-modal__nav-prev">
+      <button hx-get="{% url 'policy-violation-single-view' previous_instance %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
+        hx-target="#policyViolationDetailModalTarget" class="oh-modal__diaglog-nav oh-modal__nav-prev">
         <ion-icon name="chevron-back-outline"></ion-icon>
       </button>
-      <button hx-get="{% url 'hybrid-violation-single-view' next_instance %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
-        hx-target="#violationDetailModalTarget" class="oh-modal__diaglog-nav oh-modal__nav-next">
+      <button hx-get="{% url 'policy-violation-single-view' next_instance %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
+        hx-target="#policyViolationDetailModalTarget" class="oh-modal__diaglog-nav oh-modal__nav-next">
         <ion-icon name="chevron-forward-outline"></ion-icon>
       </button>
     </div>
@@ -45,18 +45,18 @@
           <span class="oh-timeoff-modal__stat-count dateformat_changer">{{ violation.week_start_date }}</span>
         </div>
         <div class="oh-timeoff-modal__stat" style="margin-left: 20px">
-          <span class="oh-timeoff-modal__stat-title">{% trans "Shift" %}</span>
-          <span class="oh-timeoff-modal__stat-count">{{ violation.shift_id }}</span>
+          <span class="oh-timeoff-modal__stat-title">{% trans "Policy" %}</span>
+          <span class="oh-timeoff-modal__stat-count">{{ violation.policy_id.name|default:"-" }}</span>
         </div>
       </div>
       <div class="oh-timeoff-modal__stats-container mt-3 mb-3">
         <div class="oh-timeoff-modal__stat">
           <span class="oh-timeoff-modal__stat-title">{% trans "Required Office Days" %}</span>
-          <span class="oh-timeoff-modal__stat-count">{{ violation.required_office_days }}</span>
+          <span class="oh-timeoff-modal__stat-count">{{ violation.required_days }}</span>
         </div>
         <div class="oh-timeoff-modal__stat" style="margin-left: 20px">
           <span class="oh-timeoff-modal__stat-title">{% trans "Actual Office Days" %}</span>
-          <span class="oh-timeoff-modal__stat-count">{{ violation.actual_office_days }}</span>
+          <span class="oh-timeoff-modal__stat-count">{{ violation.actual_days }}</span>
         </div>
       </div>
       <div class="oh-timeoff-modal__stats-container mt-3 mb-3">
@@ -87,10 +87,10 @@
         </div>
       {% endif %}
 
-      {% if not violation.is_resolved and request.user|is_reportingmanager or perms.attendance.resolve_hybridattendanceviolation %}
+      {% if not violation.is_resolved and request.user|is_reportingmanager or perms.attendance.resolve_attendancepolicyviolation %}
         <div class="oh-modal__button-container text-center mt-3">
-          <form hx-post="{% url 'hybrid-violation-resolve' violation.id %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
-            hx-target="#violationDetailModalTarget">
+          <form hx-post="{% url 'policy-violation-resolve' violation.id %}?{{ pd }}&instances_ids={{ instance_ids_json }}"
+            hx-target="#policyViolationDetailModalTarget">
             {% csrf_token %}
             <div class="oh-input-group mb-2">
               <label class="oh-label">{% trans "Resolution Note (optional)" %}</label>

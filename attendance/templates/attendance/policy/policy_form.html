@@ -1,0 +1,34 @@
+{% load i18n %}
+<div class="oh-modal__dialog-header pb-0">
+  <h2 class="oh-modal__dialog-title">
+    {% if form.instance.pk %}{% trans "Update" %}{% else %}{% trans "Create" %}{% endif %}
+    {{ form.verbose_name }}
+  </h2>
+  <button class="oh-modal__close" aria-label="Close">
+    <ion-icon name="close-outline"></ion-icon>
+  </button>
+</div>
+<div class="oh-modal__dialog-body">
+  <form
+    hx-post="{{ request.get_full_path }}"
+    hx-target="#policyFormModalTarget"
+    class="oh-profile-section"
+  >
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      <div class="oh-input-group mb-2">
+        <label class="oh-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}
+          <small class="oh-input__error">{{ field.errors.0 }}</small>
+        {% endif %}
+      </div>
+    {% endfor %}
+    <div class="oh-modal__dialog-footer p-0 mt-3">
+      <button type="submit" class="oh-btn oh-btn--secondary oh-btn--shadow w-100">
+        {% trans "Save" %}
+      </button>
+    </div>
+  </form>
+</div>

@@ -1,0 +1,63 @@
+{% extends 'index.html' %}
+{% load i18n %}
+{% load static %}
+{% block content %}
+{% include 'attendance/policy/violation_nav.html' %}
+<div class="oh-checkpoint-badge mb-2" id="selectedPolicyViolation" data-ids="[]" data-clicked="" style="display:none;">
+  {% trans 'Selected Violations' %}
+</div>
+<div class="oh-wrapper">
+  <div class="oh-checkpoint-badge text-success mb-2" id="selectAllPolicyViolations" style="cursor: pointer;">
+    {% trans 'Select All' %}
+  </div>
+  <div class="oh-checkpoint-badge text-secondary mb-2" id="unselectAllPolicyViolations" style="cursor: pointer; display: none;">
+    {% trans 'Unselect All' %}
+  </div>
+  <div class="oh-checkpoint-badge text-danger mb-2" id="selectedShowPolicyViolation"></div>
+  <div id="policyViolationContainer">
+    <span hx-get="{% url 'policy-violation-search' %}" hx-target="#policyViolationContainer" hx-trigger="load"></span>
+  </div>
+</div>
+
+<div class="oh-modal" id="policyViolationDetailModal" role="dialog" aria-hidden="true">
+  <div class="oh-modal__dialog" id="policyViolationDetailModalTarget" style="max-width: 600px;"></div>
+</div>
+
+<script>
+  function addingPolicyViolationIds() {
+    var ids = [];
+    $(".all-policy-violation-row:checked").each(function () { ids.push($(this).attr("id")); });
+    $("#selectedPolicyViolation").attr("data-ids", JSON.stringify(ids));
+    if (ids.length > 0) {
+      $("#selectedPolicyViolation").show();
+      $("#selectedShowPolicyViolation").show();
+    } else {
+      $("#selectedPolicyViolation").hide();
+      $("#selectedShowPolicyViolation").hide();
+    }
+  }
+  $(document).ready(function () {
+    $("#selectAllPolicyViolations").click(function () {
+      $(".all-policy-violation-row").prop("checked", true).change();
+      $("#selectAllPolicyViolations").hide();
+      $("#unselectAllPolicyViolations").show();
+    });
+    $("#unselectAllPolicyViolations").click(function () {
+      $(".all-policy-violation-row").prop("checked", false).change();
+      $("#unselectAllPolicyViolations").hide();
+      $("#selectAllPolicyViolations").show();
+    });
+    $("#policyViolationBulkDelete").click(function () {
+      var ids = JSON.parse($("#selectedPolicyViolation").attr("data-ids") || "[]");
+      if (ids.length === 0) { alert("{% trans 'No violations selected.' %}"); return; }
+      if (!confirm("{% trans 'Delete selected violations?' %}")) return;
+      $.ajax({
+        type: "POST",
+        url: "{% url 'policy-violation-bulk-delete' %}",
+        data: { ids: ids, csrfmiddlewaretoken: getCookie("csrftoken") },
+        success: function () { htmx.trigger("#policyViolationContainer", "htmx:load"); }
+      });
+    });
+  });
+</script>
+{% endblock %}

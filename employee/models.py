@@ -654,6 +654,14 @@ class EmployeeWorkInformation(models.Model):
         blank=True,
         verbose_name=_("Work Type"),
     )
+    attendance_policy_id = models.ForeignKey(
+        "attendance.AttendancePolicy",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_employees",
+        verbose_name=_("Attendance Policy"),
+    )
 
     employee_type_id = models.ForeignKey(
         EmployeeType,

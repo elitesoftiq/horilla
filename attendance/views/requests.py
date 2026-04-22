@@ -18,6 +18,7 @@ from django.utils.translation import gettext_lazy as _
 
 from attendance.filters import AttendanceFilters, AttendanceRequestReGroup
 from attendance.forms import (
+    AttendanceShiftRequestForm,
     AttendanceRequestForm,
     BatchAttendanceForm,
     BulkAttendanceRequestForm,
@@ -33,6 +34,7 @@ from attendance.models import (
     Attendance,
     AttendanceActivity,
     AttendanceLateComeEarlyOut,
+    AttendanceShiftRequest,
     BatchAttendance,
 )
 from attendance.views.clock_in_out import early_out, late_come
@@ -112,7 +114,8 @@ def request_attendance_view(request):
     attendances = AttendanceFilters(request.GET, attendances).qs
     filter_obj = AttendanceFilters()
     check_attendance = Attendance.objects.all()
-    if check_attendance.exists():
+    check_shift_requests = AttendanceShiftRequest.objects.all()
+    if check_attendance.exists() or check_shift_requests.exists():
         template = "requests/attendance/view-requests.html"
     else:
         template = "requests/attendance/requests_empty.html"
@@ -125,12 +128,14 @@ def request_attendance_view(request):
     requests = requests.filter(
         employee_id__is_active=True,
     )
+    shift_requests = _attendance_shift_requests_queryset(request, request.GET)
     return render(
         request,
         template,
         {
             "requests": paginator_qry(requests, None),
             "attendances": paginator_qry(attendances, None),
+            "shift_requests": paginator_qry(shift_requests, None),
             "requests_ids": requests_ids,
             "attendances_ids": attendances_ids,
             "f": filter_obj,
@@ -138,6 +143,35 @@ def request_attendance_view(request):
             "gp_fields": AttendanceRequestReGroup.fields,
         },
     )
+
+
+def _attendance_shift_requests_queryset(request, params=None):
+    params = params or {}
+    shift_requests = AttendanceShiftRequest.objects.filter(employee_id__is_active=True)
+    shift_requests = filtersubordinates(
+        request=request,
+        perm="attendance.view_attendance",
+        queryset=shift_requests,
+    )
+    shift_requests = shift_requests | AttendanceShiftRequest.objects.filter(
+        employee_id__employee_user_id=request.user,
+        employee_id__is_active=True,
+    )
+    shift_requests = shift_requests.distinct()
+
+    search = params.get("search")
+    if search:
+        shift_requests = shift_requests.filter(
+            Q(employee_id__employee_first_name__icontains=search)
+            | Q(employee_id__employee_last_name__icontains=search)
+            | Q(description__icontains=search)
+        )
+
+    employee_id = params.get("employee_id")
+    if employee_id and employee_id not in {"unknown", ""}:
+        shift_requests = shift_requests.filter(employee_id_id=employee_id)
+
+    return shift_requests
 
 
 @login_required
@@ -222,6 +256,54 @@ def request_new(request):
         "requests/attendance/request_new_form.html",
         {"form": form, "bulk": False},
     )
+
+
+@login_required
+@hx_request_required
+def attendance_shift_request_create(request):
+    """Create a next-week attendance shift request for the current week."""
+    form = AttendanceShiftRequestForm()
+    if request.method == "POST":
+        form = AttendanceShiftRequestForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _("Attendance shift request created"))
+            return HttpResponse(
+                render(
+                    request,
+                    "requests/attendance/shift_request_form.html",
+                    {"form": form},
+                ).content.decode("utf-8")
+                + "<script>location.reload();</script>"
+            )
+    return render(
+        request,
+        "requests/attendance/shift_request_form.html",
+        {"form": form},
+    )
+
+
+@login_required
+def attendance_shift_request_cancel(request, obj_id):
+    """Cancel an attendance shift request."""
+    shift_request = AttendanceShiftRequest.objects.filter(id=obj_id).first()
+    if not shift_request:
+        messages.error(request, _("Attendance shift request not found."))
+        return HorillaRedirect(request)
+
+    user_employee = getattr(request.user, "employee_get", None)
+    is_owner = user_employee and user_employee.id == shift_request.employee_id_id
+    can_manage = request.user.has_perm("attendance.change_attendance") or (
+        user_employee and user_employee.reporting_manager.all().exists()
+    )
+    if not (is_owner or can_manage):
+        messages.error(request, _("You don't have permission"))
+        return HorillaRedirect(request)
+
+    shift_request.canceled = True
+    shift_request.save(update_fields=["canceled"])
+    messages.success(request, _("Attendance shift request canceled"))
+    return HorillaRedirect(request)
 
 
 @login_required

@@ -1,0 +1,127 @@
+{% load i18n %} {% load static %} {% load basefilters %}
+{% include 'filter_tags.html' %}
+{% if violations %}
+<div class="oh-card">
+  {% for group in violations %}
+  <div class="oh-accordion-meta">
+    <div class="oh-accordion-meta__item">
+      <div class="oh-accordion-meta__header" onclick='$(this).toggleClass("oh-accordion-meta__header--show");'>
+        <span class="oh-accordion-meta__title pt-3 pb-3">
+          <div class="oh-tabs__input-badge-container">
+            <span class="oh-badge oh-badge--secondary oh-badge--small oh-badge--round mr-1">
+              {{ group.list.paginator.count }}
+            </span>
+            {{ group.grouper }}
+          </div>
+        </span>
+      </div>
+      <div class="oh-accordion-meta__body d-none">
+        <div class="oh-sticky-table oh-sticky-table--no-overflow mb-5">
+          <div class="oh-sticky-table__table oh-table--sortable">
+            <div class="oh-sticky-table__thead">
+              <div class="oh-sticky-table__tr">
+                <div class="oh-sticky-table__th">{% trans "Employee" %}</div>
+                <div class="oh-sticky-table__th">{% trans "Week Of" %}</div>
+                <div class="oh-sticky-table__th">{% trans "Policy" %}</div>
+                <div class="oh-sticky-table__th">{% trans "Required" %}</div>
+                <div class="oh-sticky-table__th">{% trans "Actual" %}</div>
+                <div class="oh-sticky-table__th">{% trans "Shortage" %}</div>
+                <div class="oh-sticky-table__th">{% trans "Status" %}</div>
+                {% if request.user|is_reportingmanager or perms.attendance.resolve_attendancepolicyviolation or perms.attendance.delete_attendancepolicyviolation %}
+                  <div class="oh-sticky-table__th oh-sticky-table__right">{% trans "Actions" %}</div>
+                {% endif %}
+              </div>
+            </div>
+            <div class="oh-sticky-table__tbody">
+              {% for violation in group.list %}
+              <div class="oh-sticky-table__tr" draggable="false"
+                data-toggle="oh-modal-toggle" data-target="#policyViolationDetailModal"
+                hx-target="#policyViolationDetailModalTarget"
+                hx-get="{% url 'policy-violation-single-view' violation.id %}?{{ pd }}&instances_ids={{ violation_ids }}">
+                <div class="oh-sticky-table__td">
+                  <div class="oh-profile oh-profile--md">
+                    <div class="oh-profile__avatar mr-1">
+                      <img src="{{ violation.employee_id.get_avatar }}" class="oh-profile__image" alt="" />
+                    </div>
+                    <span class="oh-profile__name oh-text--dark">{{ violation.employee_id }}</span>
+                  </div>
+                </div>
+                <div class="oh-sticky-table__td dateformat_changer">{{ violation.week_start_date }}</div>
+                <div class="oh-sticky-table__td">{{ violation.policy_id.name|default:"-" }}</div>
+                <div class="oh-sticky-table__td">{{ violation.required_days }}</div>
+                <div class="oh-sticky-table__td">{{ violation.actual_days }}</div>
+                <div class="oh-sticky-table__td">
+                  <span class="oh-badge oh-badge--danger">{{ violation.shortage }}</span>
+                </div>
+                <div class="oh-sticky-table__td">
+                  {% if violation.is_resolved %}
+                    <span class="oh-badge oh-badge--success">{% trans "Resolved" %}</span>
+                  {% else %}
+                    <span class="oh-badge oh-badge--warning">{% trans "Open" %}</span>
+                  {% endif %}
+                </div>
+                {% if request.user|is_reportingmanager or perms.attendance.resolve_attendancepolicyviolation or perms.attendance.delete_attendancepolicyviolation %}
+                  <div class="oh-sticky-table__td oh-sticky-table__right" onclick="event.stopPropagation();">
+                    <div class="oh-btn-group">
+                      {% if not violation.is_resolved %}
+                        {% if request.user|is_reportingmanager or perms.attendance.resolve_attendancepolicyviolation %}
+                          <form hx-post="{% url 'policy-violation-resolve' violation.id %}?{{ pd }}" hx-target="#policyViolationContainer" onclick="event.stopPropagation()">
+                            {% csrf_token %}
+                            <button type="submit" class="oh-btn oh-btn--success-outline oh-btn--light-bkg" title="{% trans 'Mark Resolved' %}">
+                              <ion-icon name="checkmark-circle-outline"></ion-icon>
+                            </button>
+                          </form>
+                        {% endif %}
+                      {% endif %}
+                      {% if perms.attendance.delete_attendancepolicyviolation %}
+                        <form hx-confirm="{% trans 'Delete this violation record?' %}" hx-post="{% url 'policy-violation-delete' violation.id %}?{{ pd }}" hx-target="#policyViolationContainer" onclick="event.stopPropagation()">
+                          {% csrf_token %}
+                          <button type="submit" class="oh-btn oh-btn--danger-outline oh-btn--light-bkg" title="{% trans 'Delete' %}">
+                            <ion-icon name="trash-outline"></ion-icon>
+                          </button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="oh-pagination">
+            <nav class="oh-pagination__nav">
+              <div class="oh-pagination__input-container me-3">
+                <span class="oh-pagination__label me-1">{% trans "Page" %}</span>
+                <input type="number" name="{{ group.dynamic_name }}" class="oh-pagination__input"
+                  value="{{ group.list.number }}"
+                  hx-get="{% url 'policy-violation-search' %}?{{ pd }}" hx-target="#policyViolationContainer" min="1" />
+                <span class="oh-pagination__label">{% trans "of" %} {{ group.list.paginator.num_pages }}</span>
+              </div>
+              <ul class="oh-pagination__items">
+                {% if group.list.has_previous %}
+                  <li class="oh-pagination__item oh-pagination__item--wide">
+                    <a hx-target="#policyViolationContainer" hx-get="{% url 'policy-violation-search' %}?{{ pd }}&{{ group.dynamic_name }}={{ group.list.previous_page_number }}" class="oh-pagination__link">{% trans "Previous" %}</a>
+                  </li>
+                {% endif %}
+                {% if group.list.has_next %}
+                  <li class="oh-pagination__item oh-pagination__item--wide">
+                    <a hx-target="#policyViolationContainer" hx-get="{% url 'policy-violation-search' %}?{{ pd }}&{{ group.dynamic_name }}={{ group.list.next_page_number }}" class="oh-pagination__link">{% trans "Next" %}</a>
+                  </li>
+                {% endif %}
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+  <div class="oh-wrapper">
+    <div class="oh-empty">
+      <img src="{% static 'images/ui/search.svg' %}" class="oh-404__image" alt="" />
+      <h1 class="oh-empty__title">{% trans "No Records found." %}</h1>
+    </div>
+  </div>
+{% endif %}

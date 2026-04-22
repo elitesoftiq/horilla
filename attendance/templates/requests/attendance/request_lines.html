@@ -435,6 +435,114 @@
             <!-- end of empty page -->
         {% endif %}
     </div>
+    <div class="oh-tabs__content" id="tab_3">
+        {% if shift_requests %}
+            <div class="oh-table_sticky--wrapper">
+                <div id="attendance-shift-request-table" data-table-name="attendance_shift_request_tab">
+                    <div class="oh-sticky-table">
+                        <div class="oh-sticky-table__table oh-table--sortable">
+                            <div class="oh-sticky-table__thead">
+                                <div class="oh-sticky-table__tr">
+                                    <div class="oh-sticky-table__th">{% trans "Employee" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="1" data-cell-title='{% trans "Type" %}'>{% trans "Type" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="2" data-cell-title='{% trans "From Week" %}'>{% trans "From Week" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="3" data-cell-title='{% trans "To Week" %}'>{% trans "To Week" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="4" data-cell-title='{% trans "Days" %}'>{% trans "Days" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="5" data-cell-title='{% trans "Description" %}'>{% trans "Description" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="6" data-cell-title='{% trans "Status" %}'>{% trans "Status" %}</div>
+                                    <div class="oh-sticky-table__th oh-sticky-table__right">{% trans "Actions" %}</div>
+                                </div>
+                            </div>
+                            <div class="oh-sticky-table__tbody">
+                                {% for shift_request in shift_requests %}
+                                    <div class="oh-sticky-table__tr">
+                                        <div class="oh-sticky-table__td">
+                                            <div class="oh-profile oh-profile--md">
+                                                <div class="oh-profile__avatar mr-1">
+                                                    <img src="{{ shift_request.employee_id.get_avatar }}" class="oh-profile__image" alt="" />
+                                                </div>
+                                                <span class="oh-profile__name oh-text--dark">{{ shift_request.employee_id }}</span>
+                                            </div>
+                                        </div>
+                                        <div data-cell-index="1" class="oh-sticky-table__td">{{ shift_request.get_request_kind_display }}</div>
+                                        <div data-cell-index="2" class="oh-sticky-table__td dateformat_changer">{{ shift_request.from_week_start_date }}</div>
+                                        <div data-cell-index="3" class="oh-sticky-table__td dateformat_changer">{{ shift_request.to_week_start_date }}</div>
+                                        <div data-cell-index="4" class="oh-sticky-table__td">{{ shift_request.requested_days }}</div>
+                                        <div data-cell-index="5" class="oh-sticky-table__td">{{ shift_request.description|default:"-" }}</div>
+                                        <div data-cell-index="6" class="oh-sticky-table__td">
+                                            {% if shift_request.canceled %}
+                                                <span class="oh-badge oh-badge--danger">{% trans "Canceled" %}</span>
+                                            {% else %}
+                                                <span class="oh-badge oh-badge--info">{% trans "Requested" %}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="oh-sticky-table__td oh-sticky-table__right">
+                                            {% if not shift_request.canceled %}
+                                                <a
+                                                    class="oh-btn oh-btn--danger-outline oh-btn--light-bkg"
+                                                    title="{% trans 'Cancel' %}"
+                                                    onclick="return confirm('{% trans 'Are you sure you want to cancel this attendance shift request?' %}')"
+                                                    href="{% url 'attendance-shift-request-cancel' shift_request.id %}">
+                                                    <ion-icon name="close-circle-outline"></ion-icon>
+                                                </a>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="oh-pagination">
+                        <span class="oh-pagination__page">
+                            {% trans "Page" %} {{ shift_requests.number }} {% trans "of" %} {{ shift_requests.paginator.num_pages }}.
+                        </span>
+                        <nav class="oh-pagination__nav">
+                            <div class="oh-pagination__input-container me-3">
+                                <span class="oh-pagination__label me-1">{% trans "Page" %}</span>
+                                <input type="number" name="spage" class="oh-pagination__input" value="{{shift_requests.number}}"
+                                    hx-get="{% url 'search-attendance-requests' %}?{{pd}}" hx-target="#view-container" min="1" />
+                                <span class="oh-pagination__label">{% trans "of" %} {{shift_requests.paginator.num_pages}}</span>
+                            </div>
+                            <ul class="oh-pagination__items">
+                                {% if shift_requests.has_previous %}
+                                    <li class="oh-pagination__item oh-pagination__item--wide">
+                                        <a hx-target='#view-container'
+                                            hx-get="{% url 'search-attendance-requests' %}?{{pd}}&spage=1"
+                                            class="oh-pagination__link">{% trans "First" %}</a>
+                                    </li>
+                                    <li class="oh-pagination__item oh-pagination__item--wide">
+                                        <a hx-target='#view-container'
+                                            hx-get="{% url 'search-attendance-requests' %}?{{pd}}&spage={{ shift_requests.previous_page_number }}"
+                                            class="oh-pagination__link">{% trans "Previous" %}</a>
+                                    </li>
+                                {% endif %}
+                                {% if shift_requests.has_next %}
+                                    <li class="oh-pagination__item oh-pagination__item--wide">
+                                        <a hx-target='#view-container'
+                                            hx-get="{% url 'search-attendance-requests' %}?{{pd}}&spage={{ shift_requests.next_page_number }}"
+                                            class="oh-pagination__link">{% trans "Next" %}</a>
+                                    </li>
+                                    <li class="oh-pagination__item oh-pagination__item--wide">
+                                        <a hx-target='#view-container'
+                                            hx-get="{% url 'search-attendance-requests' %}?{{pd}}&spage={{ shift_requests.paginator.num_pages }}"
+                                            class="oh-pagination__link">{% trans "Last" %}</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%;">
+                <img style="width: 150px; height: 150px" src="{% static 'images/ui/no-results.png' %}"
+                    class="oh-404__image mb-4" />
+                <h5 class="oh-404__subtitle">
+                    {% trans "No attendance shift requests found!" %}
+                </h5>
+            </div>
+        {% endif %}
+    </div>
 
 
 

@@ -11,6 +11,7 @@ import attendance.views.clock_in_out
 import attendance.views.dashboard
 import attendance.views.geofaceconfig
 import attendance.views.penalty
+import attendance.views.policy
 import attendance.views.requests
 import attendance.views.search
 import base
@@ -312,6 +313,16 @@ urlpatterns = [
         name="request-new-attendance",
     ),
     path(
+        "attendance-shift-request/create",
+        attendance.views.requests.attendance_shift_request_create,
+        name="attendance-shift-request-create",
+    ),
+    path(
+        "attendance-shift-request/<int:obj_id>/cancel",
+        attendance.views.requests.attendance_shift_request_cancel,
+        name="attendance-shift-request-cancel",
+    ),
+    path(
         "create-batch-attendance",
         attendance.views.requests.create_batch_attendance,
         name="create-batch-attendance",
@@ -563,5 +574,62 @@ urlpatterns = [
         "hybrid-violations/bulk-delete",
         views.hybrid_violation_bulk_delete,
         name="hybrid-violation-bulk-delete",
+    ),
+    # ── Attendance Policies ──────────────────────────────────────────────────
+    path(
+        "attendance-policies/",
+        attendance.views.policy.attendance_policy_view,
+        name="attendance-policy-view",
+    ),
+    path(
+        "attendance-policies/search",
+        attendance.views.policy.attendance_policy_search,
+        name="attendance-policy-search",
+    ),
+    path(
+        "attendance-policies/create",
+        attendance.views.policy.attendance_policy_create,
+        name="attendance-policy-create",
+    ),
+    path(
+        "attendance-policies/<int:obj_id>/update/",
+        attendance.views.policy.attendance_policy_update,
+        name="attendance-policy-update",
+    ),
+    path(
+        "attendance-policies/<int:obj_id>/delete/",
+        attendance.views.policy.attendance_policy_delete,
+        name="attendance-policy-delete",
+    ),
+    # ── Attendance Policy Violations ─────────────────────────────────────────
+    path(
+        "policy-violations/",
+        attendance.views.policy.policy_violation_view,
+        name="policy-violation-view",
+    ),
+    path(
+        "policy-violations/search",
+        attendance.views.policy.policy_violation_search,
+        name="policy-violation-search",
+    ),
+    path(
+        "policy-violations/<int:obj_id>/",
+        attendance.views.policy.policy_violation_single_view,
+        name="policy-violation-single-view",
+    ),
+    path(
+        "policy-violations/<int:obj_id>/resolve/",
+        attendance.views.policy.policy_violation_resolve,
+        name="policy-violation-resolve",
+    ),
+    path(
+        "policy-violations/<int:obj_id>/delete/",
+        attendance.views.policy.policy_violation_delete,
+        name="policy-violation-delete",
+    ),
+    path(
+        "policy-violations/bulk-delete",
+        attendance.views.policy.policy_violation_bulk_delete,
+        name="policy-violation-bulk-delete",
     ),
 ]
