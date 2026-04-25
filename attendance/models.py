@@ -1063,6 +1063,12 @@ class WorkRecords(models.Model):
     )
     day_percentage = models.FloatField(default=0)
     last_update = models.DateTimeField(null=True, blank=True)
+    missed_attendance_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("Missed Attendance Notified At"),
+    )
     objects = HorillaCompanyManager("employee_id__employee_work_info__company_id")
 
     def title_message(self):
@@ -1134,6 +1140,12 @@ class HybridAttendanceViolation(HorillaModel):
     )
     note = models.TextField(
         null=True, blank=True, verbose_name=_("Note"), max_length=255
+    )
+    employee_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("Employee Notified At"),
     )
     objects = HorillaCompanyManager(
         related_company_field="employee_id__employee_work_info__company_id"
@@ -1256,6 +1268,12 @@ class AttendancePolicyViolation(HorillaModel):
     )
     note = models.TextField(
         null=True, blank=True, verbose_name=_("Note"), max_length=255
+    )
+    employee_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("Employee Notified At"),
     )
     objects = HorillaCompanyManager(
         related_company_field="employee_id__employee_work_info__company_id"

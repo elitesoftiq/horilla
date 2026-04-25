@@ -4,8 +4,38 @@ import sys
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from django.conf import settings
+from django.db.models import Q
+from django.urls import reverse
+from django.utils import timezone
 
 from base.backends import logger
+from notifications.signals import notify
+
+
+def _get_notification_sender():
+    from django.contrib.auth.models import User
+
+    return User.objects.filter(username="Horilla Bot").first()
+
+
+def _notify_employee(employee, *, verb, verb_ar, verb_de, verb_es, verb_fr, icon):
+    sender = _get_notification_sender()
+    recipient = getattr(employee, "employee_user_id", None)
+    if sender is None or recipient is None:
+        return False
+
+    notify.send(
+        sender,
+        recipient=recipient,
+        verb=verb,
+        verb_ar=verb_ar,
+        verb_de=verb_de,
+        verb_es=verb_es,
+        verb_fr=verb_fr,
+        redirect=reverse("view-my-attendance"),
+        icon=icon,
+    )
+    return True
 
 
 def _get_shifted_days_for_week(violation_model, employee, week_start):
@@ -31,6 +61,76 @@ def _get_shifted_days_for_week(violation_model, employee, week_start):
     return AttendanceShiftRequest.objects.filter(
         **filters
     ).count()
+
+
+def notify_missed_attendance_day():
+    """
+    Notify employees once when the previous working day still has no
+    attendance record attached to its work record.
+    """
+    from attendance.models import WorkRecords
+    from base.methods import is_company_leave, is_holiday
+
+    target_date = timezone.localdate() - datetime.timedelta(days=1)
+    target_day = target_date.strftime("%A").lower()
+
+    if is_holiday(target_date) or is_company_leave(target_date):
+        return
+
+    missed_records = (
+        WorkRecords.objects.filter(
+            date=target_date,
+            work_record_type="DFT",
+            missed_attendance_notified_at__isnull=True,
+            employee_id__is_active=True,
+            is_attendance_record=False,
+            is_leave_record=False,
+            employee_id__employee_work_info__shift_id__employeeshiftschedule__day__day=target_day,
+        )
+        .filter(
+            Q(employee_id__employee_work_info__date_joining__isnull=True)
+            | Q(employee_id__employee_work_info__date_joining__lte=target_date)
+        )
+        .select_related("employee_id__employee_user_id")
+        .distinct()
+    )
+
+    notification_time = timezone.now()
+    records_to_update = []
+    for work_record in missed_records:
+        employee = work_record.employee_id
+        was_sent = _notify_employee(
+            employee,
+            verb=(
+                f"You missed your attendance for {target_date}. "
+                "Please submit or correct it if needed."
+            ),
+            verb_ar=(
+                f"لقد فاتك تسجيل الحضور ليوم {target_date}. "
+                "يرجى تقديمه أو تصحيحه إذا لزم الأمر."
+            ),
+            verb_de=(
+                f"Sie haben Ihre Anwesenheit fuer den {target_date} verpasst. "
+                "Bitte reichen Sie sie bei Bedarf nach oder korrigieren Sie sie."
+            ),
+            verb_es=(
+                f"Has omitido tu asistencia del {target_date}. "
+                "Enviala o corrigela si es necesario."
+            ),
+            verb_fr=(
+                f"Vous avez manque votre pointage du {target_date}. "
+                "Veuillez le soumettre ou le corriger si necessaire."
+            ),
+            icon="calendar-clear",
+        )
+        if was_sent:
+            work_record.missed_attendance_notified_at = notification_time
+            records_to_update.append(work_record)
+
+    if records_to_update:
+        WorkRecords.objects.bulk_update(
+            records_to_update, ["missed_attendance_notified_at"]
+        )
 
 
 def check_hybrid_compliance():
@@ -96,6 +196,38 @@ def check_hybrid_compliance():
                         "actual_office_days",
                     ]
                 )
+            if created or not violation.employee_notified_at:
+                was_sent = _notify_employee(
+                    employee,
+                    verb=(
+                        "You missed your weekly office attendance target for the "
+                        f"week starting {week_start} "
+                        f"({office_days}/{required_days} office days)."
+                    ),
+                    verb_ar=(
+                        "لقد لم تحقق هدف الحضور المكتبي الاسبوعي للاسبوع الذي يبدأ في "
+                        f"{week_start} ({office_days}/{required_days} ايام مكتبية)."
+                    ),
+                    verb_de=(
+                        "Sie haben Ihr woechentliches Bueroanwesenheitsziel fuer die "
+                        f"Woche ab dem {week_start} verfehlt "
+                        f"({office_days}/{required_days} Buerotage)."
+                    ),
+                    verb_es=(
+                        "No alcanzaste tu objetivo semanal de asistencia en oficina "
+                        f"para la semana que empieza el {week_start} "
+                        f"({office_days}/{required_days} dias de oficina)."
+                    ),
+                    verb_fr=(
+                        "Vous n'avez pas atteint votre objectif hebdomadaire de "
+                        f"presence au bureau pour la semaine commencant le {week_start} "
+                        f"({office_days}/{required_days} jours au bureau)."
+                    ),
+                    icon="alert-circle",
+                )
+                if was_sent:
+                    violation.employee_notified_at = timezone.now()
+                    violation.save(update_fields=["employee_notified_at"])
         else:
             # If a previously created violation now shows compliance (manual
             # attendance corrections), update the actual count.
@@ -162,6 +294,38 @@ def check_policy_compliance():
                 violation.save(
                     update_fields=["policy_id", "required_days", "actual_days"]
                 )
+            if created or not violation.employee_notified_at:
+                was_sent = _notify_employee(
+                    employee,
+                    verb=(
+                        "You missed your weekly attendance policy target for the "
+                        f"week starting {week_start} "
+                        f"({office_days}/{required_days} office days)."
+                    ),
+                    verb_ar=(
+                        "لقد لم تحقق هدف سياسة الحضور الاسبوعية للاسبوع الذي يبدأ في "
+                        f"{week_start} ({office_days}/{required_days} ايام مكتبية)."
+                    ),
+                    verb_de=(
+                        "Sie haben Ihr woechentliches Anwesenheitsrichtlinienziel fuer "
+                        f"die Woche ab dem {week_start} verfehlt "
+                        f"({office_days}/{required_days} Buerotage)."
+                    ),
+                    verb_es=(
+                        "No alcanzaste tu objetivo semanal de la politica de asistencia "
+                        f"para la semana que empieza el {week_start} "
+                        f"({office_days}/{required_days} dias de oficina)."
+                    ),
+                    verb_fr=(
+                        "Vous n'avez pas atteint votre objectif hebdomadaire de "
+                        f"politique de presence pour la semaine commencant le {week_start} "
+                        f"({office_days}/{required_days} jours au bureau)."
+                    ),
+                    icon="alert-circle",
+                )
+                if was_sent:
+                    violation.employee_notified_at = timezone.now()
+                    violation.save(update_fields=["employee_notified_at"])
         else:
             AttendancePolicyViolation.objects.filter(
                 employee_id=employee,
@@ -227,6 +391,15 @@ if not any(
         minute=30,
         misfire_grace_time=3600 * 9,
         id="create_daily_work_record",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        notify_missed_attendance_day,
+        "cron",
+        hour=0,
+        minute=40,
+        misfire_grace_time=3600 * 6,
+        id="notify_missed_attendance_day",
         replace_existing=True,
     )
 
