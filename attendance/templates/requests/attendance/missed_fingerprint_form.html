@@ -1,0 +1,62 @@
+{% load i18n %}
+<div class="oh-modal__dialog-header">
+    <h2 class="oh-modal__dialog-title">{{ form.verbose_name }}</h2>
+    <button class="oh-modal__close" aria-label="Close">
+        <ion-icon name="close-outline"></ion-icon>
+    </button>
+</div>
+<div class="oh-modal__dialog-body">
+    <form hx-post="{% url 'missed-fingerprint-request-create' %}" hx-target="#objectCreateModalTarget" class="oh-profile-section">
+        {% csrf_token %}
+        <div class="col-12">{{ form.non_field_errors }}</div>
+        <div class="row">
+            <div class="col-12 col-md-6">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{{ form.employee_id.label }}</label>
+                    {{ form.employee_id }}
+                    {{ form.employee_id.errors }}
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{{ form.attendance_date.label }}</label>
+                    {{ form.attendance_date }}
+                    {{ form.attendance_date.errors }}
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{{ form.punch_time.label }}</label>
+                    {{ form.punch_time }}
+                    {{ form.punch_time.errors }}
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{{ form.punch_type.label }}</label>
+                    {{ form.punch_type }}
+                    {{ form.punch_type.errors }}
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{{ form.attendance_location.label }}</label>
+                    {{ form.attendance_location }}
+                    {{ form.attendance_location.errors }}
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="oh-input-group mb-2">
+                    <label class="oh-label">{{ form.description.label }}</label>
+                    {{ form.description }}
+                    {{ form.description.errors }}
+                </div>
+            </div>
+        </div>
+        <div class="oh-modal__button-container text-center mt-3">
+            <button type="submit" class="oh-btn oh-btn--secondary w-100">
+                {% trans "Request" %}
+            </button>
+        </div>
+    </form>
+</div>

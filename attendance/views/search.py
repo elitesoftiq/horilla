@@ -28,7 +28,10 @@ from attendance.models import (
     AttendanceValidationCondition,
     HybridAttendanceViolation,
 )
-from attendance.views.requests import _attendance_shift_requests_queryset
+from attendance.views.requests import (
+    _attendance_shift_requests_queryset,
+    _missed_fingerprint_requests_queryset,
+)
 from attendance.views.views import paginator_qry, strtime_seconds
 from base.methods import filtersubordinates, get_key_instances, is_reportingmanager, sortby
 from horilla.decorators import hx_request_required, login_required, manager_can_enter
@@ -460,6 +463,9 @@ def search_attendance_requests(request):
         ]
     )
     shift_requests = _attendance_shift_requests_queryset(request, request.GET)
+    missed_fingerprint_requests = _missed_fingerprint_requests_queryset(
+        request, request.GET
+    )
     if field != "" and field is not None:
         requests = group_by_queryset(requests, field, request.GET.get("rpage"), "rpage")
         attendances = group_by_queryset(
@@ -470,6 +476,9 @@ def search_attendance_requests(request):
         requests = paginator_qry(requests, request.GET.get("rpage"))
         attendances = paginator_qry(attendances, request.GET.get("page"))
     shift_requests = paginator_qry(shift_requests, request.GET.get("spage"))
+    missed_fingerprint_requests = paginator_qry(
+        missed_fingerprint_requests, request.GET.get("fpage")
+    )
     return render(
         request,
         template,
@@ -477,6 +486,7 @@ def search_attendance_requests(request):
             "requests": requests,
             "attendances": attendances,
             "shift_requests": shift_requests,
+            "missed_fingerprint_requests": missed_fingerprint_requests,
             "requests_ids": requests_ids,
             "attendances_ids": attendances_ids,
             "pd": previous_data,

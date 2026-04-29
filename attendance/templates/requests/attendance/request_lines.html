@@ -543,6 +543,138 @@
             </div>
         {% endif %}
     </div>
+    <div class="oh-tabs__content" id="tab_4">
+        {% if missed_fingerprint_requests %}
+            <div class="oh-table_sticky--wrapper">
+                <div id="missed-fingerprint-request-table" data-table-name="missed_fingerprint_request_tab">
+                    <div class="oh-sticky-table">
+                        <div class="oh-sticky-table__table oh-table--sortable">
+                            <div class="oh-sticky-table__thead">
+                                <div class="oh-sticky-table__tr">
+                                    <div class="oh-sticky-table__th">{% trans "Employee" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="1" data-cell-title='{% trans "Date" %}'>{% trans "Date" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="2" data-cell-title='{% trans "Time" %}'>{% trans "Time" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="3" data-cell-title='{% trans "Punch Type" %}'>{% trans "Punch Type" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="4" data-cell-title='{% trans "Work Type" %}'>{% trans "Work Type" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="5" data-cell-title='{% trans "Description" %}'>{% trans "Description" %}</div>
+                                    <div class="oh-sticky-table__th" data-cell-index="6" data-cell-title='{% trans "Status" %}'>{% trans "Status" %}</div>
+                                    <div class="oh-sticky-table__th oh-sticky-table__right">{% trans "Actions" %}</div>
+                                </div>
+                            </div>
+                            <div class="oh-sticky-table__tbody">
+                                {% for missed_request in missed_fingerprint_requests %}
+                                    <div class="oh-sticky-table__tr">
+                                        <div class="oh-sticky-table__td">
+                                            <div class="oh-profile oh-profile--md">
+                                                <div class="oh-profile__avatar mr-1">
+                                                    <img src="{{ missed_request.employee_id.get_avatar }}" class="oh-profile__image" alt="" />
+                                                </div>
+                                                <span class="oh-profile__name oh-text--dark">{{ missed_request.employee_id }}</span>
+                                            </div>
+                                        </div>
+                                        <div data-cell-index="1" class="oh-sticky-table__td dateformat_changer">{{ missed_request.attendance_date }}</div>
+                                        <div data-cell-index="2" class="oh-sticky-table__td timeformat_changer">{{ missed_request.punch_time }}</div>
+                                        <div data-cell-index="3" class="oh-sticky-table__td">{{ missed_request.get_punch_type_display }}</div>
+                                        <div data-cell-index="4" class="oh-sticky-table__td">{{ missed_request.get_attendance_location_display }}</div>
+                                        <div data-cell-index="5" class="oh-sticky-table__td">{{ missed_request.description|default:"-" }}</div>
+                                        <div data-cell-index="6" class="oh-sticky-table__td">
+                                            {% if missed_request.status == "approved" %}
+                                                <span class="oh-badge oh-badge--success">{% trans "Approved" %}</span>
+                                            {% elif missed_request.status == "rejected" %}
+                                                <span class="oh-badge oh-badge--danger">{% trans "Rejected" %}</span>
+                                            {% elif missed_request.status == "canceled" %}
+                                                <span class="oh-badge oh-badge--danger">{% trans "Canceled" %}</span>
+                                            {% else %}
+                                                <span class="oh-badge oh-badge--info">{% trans "Requested" %}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="oh-sticky-table__td oh-sticky-table__right">
+                                            {% if missed_request.status == "requested" %}
+                                                <div class="oh-btn-group">
+                                                    {% if perms.attendance.change_attendance or request.user|is_reportingmanager %}
+                                                        <a
+                                                            class="oh-btn oh-btn--success-outline oh-btn--light-bkg"
+                                                            title="{% trans 'Approve' %}"
+                                                            onclick="return confirm('{% trans 'Do you want to approve this missed fingerprint request?' %}')"
+                                                            href="{% url 'missed-fingerprint-request-approve' missed_request.id %}">
+                                                            <ion-icon name="checkmark-circle-outline"></ion-icon>
+                                                        </a>
+                                                        <a
+                                                            class="oh-btn oh-btn--danger-outline oh-btn--light-bkg"
+                                                            title="{% trans 'Reject' %}"
+                                                            onclick="return confirm('{% trans 'Do you want to reject this missed fingerprint request?' %}')"
+                                                            href="{% url 'missed-fingerprint-request-reject' missed_request.id %}">
+                                                            <ion-icon name="close-circle-outline"></ion-icon>
+                                                        </a>
+                                                    {% endif %}
+                                                    {% if missed_request.employee_id.employee_user_id == request.user %}
+                                                        <a
+                                                            class="oh-btn oh-btn--danger-outline oh-btn--light-bkg"
+                                                            title="{% trans 'Cancel' %}"
+                                                            onclick="return confirm('{% trans 'Are you sure you want to cancel this missed fingerprint request?' %}')"
+                                                            href="{% url 'missed-fingerprint-request-cancel' missed_request.id %}">
+                                                            <ion-icon name="ban-outline"></ion-icon>
+                                                        </a>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="oh-pagination">
+                        <span class="oh-pagination__page">
+                            {% trans "Page" %} {{ missed_fingerprint_requests.number }} {% trans "of" %} {{ missed_fingerprint_requests.paginator.num_pages }}.
+                        </span>
+                        <nav class="oh-pagination__nav">
+                            <div class="oh-pagination__input-container me-3">
+                                <span class="oh-pagination__label me-1">{% trans "Page" %}</span>
+                                <input type="number" name="fpage" class="oh-pagination__input" value="{{missed_fingerprint_requests.number}}"
+                                    hx-get="{% url 'search-attendance-requests' %}?{{pd}}" hx-target="#view-container" min="1" />
+                                <span class="oh-pagination__label">{% trans "of" %} {{missed_fingerprint_requests.paginator.num_pages}}</span>
+                            </div>
+                            <ul class="oh-pagination__items">
+                                {% if missed_fingerprint_requests.has_previous %}
+                                    <li class="oh-pagination__item oh-pagination__item--wide">
+                                        <a hx-target='#view-container'
+                                            hx-get="{% url 'search-attendance-requests' %}?{{pd}}&fpage=1"
+                                            class="oh-pagination__link">{% trans "First" %}</a>
+                                    </li>
+                                    <li class="oh-pagination__item oh-pagination__item--wide">
+                                        <a hx-target='#view-container'
+                                            hx-get="{% url 'search-attendance-requests' %}?{{pd}}&fpage={{ missed_fingerprint_requests.previous_page_number }}"
+                                            class="oh-pagination__link">{% trans "Previous" %}</a>
+                                    </li>
+                                {% endif %}
+                                {% if missed_fingerprint_requests.has_next %}
+                                    <li class="oh-pagination__item oh-pagination__item--wide">
+                                        <a hx-target='#view-container'
+                                            hx-get="{% url 'search-attendance-requests' %}?{{pd}}&fpage={{ missed_fingerprint_requests.next_page_number }}"
+                                            class="oh-pagination__link">{% trans "Next" %}</a>
+                                    </li>
+                                    <li class="oh-pagination__item oh-pagination__item--wide">
+                                        <a hx-target='#view-container'
+                                            hx-get="{% url 'search-attendance-requests' %}?{{pd}}&fpage={{ missed_fingerprint_requests.paginator.num_pages }}"
+                                            class="oh-pagination__link">{% trans "Last" %}</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%;">
+                <img style="width: 150px; height: 150px" src="{% static 'images/ui/no-results.png' %}"
+                    class="oh-404__image mb-4" />
+                <h5 class="oh-404__subtitle">
+                    {% trans "No missed fingerprint requests found!" %}
+                </h5>
+            </div>
+        {% endif %}
+    </div>
 
 
 

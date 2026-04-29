@@ -15,6 +15,9 @@
                     <div class="oh-sticky-table__th">
                         {% trans 'Check in/Check out' %}
                     </div>
+                    <div class="oh-sticky-table__th">
+                        {% trans 'Monthly Missed Fingerprint Requests' %}
+                    </div>
                 </div>
             </div>
             <div class="oh-sticky-table__tbody">
@@ -48,6 +51,27 @@
                                 {% endif %}
                             >
                         </div>
+                    </div>
+                    <div class="oh-sticky-table__td">
+                        <input type="hidden" name="setting_Id" value="{{att_setting.id}}"
+                            id="missedPunchSetting{{att_setting.id}}">
+                        <input
+                            type="number"
+                            min="0"
+                            name="missed_punch_request_limit_per_month"
+                            class="oh-input"
+                            value="{{att_setting.missed_punch_request_limit_per_month|default_if_none:''}}"
+                            placeholder="{% trans 'Unlimited' %}"
+                            {% if perms.attendance.change_attendancegeneralsetting %}
+                                hx-post="{% url 'update-missed-punch-request-limit' %}"
+                                hx-trigger="change delay:300ms"
+                                hx-include="#missedPunchSetting{{att_setting.id}}"
+                                hx-swap="none"
+                                hx-on-htmx-after-request="setTimeout(() => { reloadMessage(); }, 200);"
+                            {% else %}
+                                disabled
+                            {% endif %}
+                        >
                     </div>
                 </div>
                 {% endfor %}

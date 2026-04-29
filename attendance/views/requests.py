@@ -5,28 +5,35 @@ This module is used to register the endpoints to the attendance requests
 """
 
 import copy
+import datetime
 import json
 from urllib.parse import parse_qs
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from attendance.filters import AttendanceFilters, AttendanceRequestReGroup
 from attendance.forms import (
-    AttendanceShiftRequestForm,
     AttendanceRequestForm,
+    AttendanceShiftRequestForm,
     BatchAttendanceForm,
     BulkAttendanceRequestForm,
+    MissedFingerprintRequestForm,
     NewRequestForm,
 )
 from attendance.methods.utils import (
+    activity_datetime,
+    format_time,
     get_diff_dict,
     get_employee_last_name,
+    overtime_calculation,
     paginator_qry,
     shift_schedule_today,
 )
@@ -36,8 +43,14 @@ from attendance.models import (
     AttendanceLateComeEarlyOut,
     AttendanceShiftRequest,
     BatchAttendance,
+    MissedFingerprintRequest,
 )
-from attendance.views.clock_in_out import early_out, late_come
+from attendance.views.clock_in_out import (
+    _update_attendance_location,
+    early_out,
+    late_come,
+)
+from attendance.views.views import attendance_validate
 from base.methods import (
     choosesubordinates,
     closest_numbers,
@@ -115,7 +128,12 @@ def request_attendance_view(request):
     filter_obj = AttendanceFilters()
     check_attendance = Attendance.objects.all()
     check_shift_requests = AttendanceShiftRequest.objects.all()
-    if check_attendance.exists() or check_shift_requests.exists():
+    check_missed_fingerprint_requests = MissedFingerprintRequest.objects.all()
+    if (
+        check_attendance.exists()
+        or check_shift_requests.exists()
+        or check_missed_fingerprint_requests.exists()
+    ):
         template = "requests/attendance/view-requests.html"
     else:
         template = "requests/attendance/requests_empty.html"
@@ -129,6 +147,9 @@ def request_attendance_view(request):
         employee_id__is_active=True,
     )
     shift_requests = _attendance_shift_requests_queryset(request, request.GET)
+    missed_fingerprint_requests = _missed_fingerprint_requests_queryset(
+        request, request.GET
+    )
     return render(
         request,
         template,
@@ -136,6 +157,9 @@ def request_attendance_view(request):
             "requests": paginator_qry(requests, None),
             "attendances": paginator_qry(attendances, None),
             "shift_requests": paginator_qry(shift_requests, None),
+            "missed_fingerprint_requests": paginator_qry(
+                missed_fingerprint_requests, None
+            ),
             "requests_ids": requests_ids,
             "attendances_ids": attendances_ids,
             "f": filter_obj,
@@ -172,6 +196,38 @@ def _attendance_shift_requests_queryset(request, params=None):
         shift_requests = shift_requests.filter(employee_id_id=employee_id)
 
     return shift_requests
+
+
+def _missed_fingerprint_requests_queryset(request, params=None):
+    params = params or {}
+    fingerprint_requests = MissedFingerprintRequest.objects.filter(
+        employee_id__is_active=True
+    )
+    fingerprint_requests = filtersubordinates(
+        request=request,
+        perm="attendance.view_attendance",
+        queryset=fingerprint_requests,
+    )
+    fingerprint_requests = fingerprint_requests | MissedFingerprintRequest.objects.filter(
+        employee_id__employee_user_id=request.user,
+        employee_id__is_active=True,
+    )
+    fingerprint_requests = fingerprint_requests.distinct()
+
+    search = params.get("search")
+    if search:
+        fingerprint_requests = fingerprint_requests.filter(
+            Q(employee_id__employee_first_name__icontains=search)
+            | Q(employee_id__employee_last_name__icontains=search)
+            | Q(description__icontains=search)
+            | Q(reject_reason__icontains=search)
+        )
+
+    employee_id = params.get("employee_id")
+    if employee_id and employee_id not in {"unknown", ""}:
+        fingerprint_requests = fingerprint_requests.filter(employee_id_id=employee_id)
+
+    return fingerprint_requests
 
 
 @login_required
@@ -303,6 +359,314 @@ def attendance_shift_request_cancel(request, obj_id):
     shift_request.canceled = True
     shift_request.save(update_fields=["canceled"])
     messages.success(request, _("Attendance shift request canceled"))
+    return HorillaRedirect(request)
+
+
+@login_required
+@hx_request_required
+def missed_fingerprint_request_create(request):
+    """Create a missed biometric punch request."""
+    form = MissedFingerprintRequestForm()
+    if request.method == "POST":
+        form = MissedFingerprintRequestForm(request.POST)
+        if form.is_valid():
+            missed_request = form.save()
+            messages.success(request, _("Missed fingerprint request created"))
+            employee = missed_request.employee_id
+            reporting_manager = getattr(
+                getattr(employee, "employee_work_info", None),
+                "reporting_manager_id",
+                None,
+            )
+            if reporting_manager and reporting_manager.employee_user_id:
+                notify.send(
+                    request.user,
+                    recipient=reporting_manager.employee_user_id,
+                    verb=(
+                        f"{employee}'s missed fingerprint request for "
+                        f"{missed_request.attendance_date} is created"
+                    ),
+                    verb_ar=(
+                        f"تم إنشاء طلب بصمة فائتة لـ {employee} "
+                        f"بتاريخ {missed_request.attendance_date}"
+                    ),
+                    verb_de=(
+                        f"Der Antrag auf verpassten Fingerabdruck von {employee} "
+                        f"fuer den {missed_request.attendance_date} wurde erstellt"
+                    ),
+                    verb_es=(
+                        f"Se ha creado la solicitud de huella omitida de {employee} "
+                        f"para el {missed_request.attendance_date}"
+                    ),
+                    verb_fr=(
+                        f"La demande d'empreinte manquee de {employee} "
+                        f"pour le {missed_request.attendance_date} a ete creee"
+                    ),
+                    redirect=reverse("request-attendance-view"),
+                    icon="finger-print-outline",
+                )
+            return HttpResponse(
+                render(
+                    request,
+                    "requests/attendance/missed_fingerprint_form.html",
+                    {"form": form},
+                ).content.decode("utf-8")
+                + "<script>location.reload();</script>"
+            )
+    return render(
+        request,
+        "requests/attendance/missed_fingerprint_form.html",
+        {"form": form},
+    )
+
+
+def _can_manage_missed_fingerprint_request(request, missed_request):
+    user_employee = getattr(request.user, "employee_get", None)
+    if request.user.has_perm("attendance.change_attendance"):
+        return True
+    return (
+        user_employee
+        and getattr(missed_request.employee_id, "employee_work_info", None)
+        and missed_request.employee_id.employee_work_info.reporting_manager_id
+        == user_employee
+    )
+
+
+def _recalculate_attendance_from_activities(attendance):
+    activities = AttendanceActivity.objects.filter(
+        employee_id=attendance.employee_id,
+        attendance_date=attendance.attendance_date,
+    ).order_by("clock_in_date", "clock_in", "id")
+    first_activity = activities.first()
+    closed_activities = activities.filter(clock_out__isnull=False).order_by(
+        "clock_out_date", "clock_out", "id"
+    )
+    last_closed = closed_activities.last()
+
+    if first_activity:
+        attendance.attendance_clock_in_date = first_activity.clock_in_date
+        attendance.attendance_clock_in = first_activity.clock_in
+    if last_closed:
+        attendance.attendance_clock_out_date = last_closed.clock_out_date
+        attendance.attendance_clock_out = last_closed.clock_out
+
+    duration = 0
+    for activity in closed_activities:
+        in_datetime, out_datetime = activity_datetime(activity)
+        difference = out_datetime - in_datetime
+        duration += difference.days * 24 * 3600 + difference.seconds
+
+    attendance.attendance_worked_hour = format_time(duration)
+    attendance.attendance_overtime = overtime_calculation(attendance)
+    attendance.attendance_validated = attendance_validate(attendance)
+    attendance.save()
+    _update_attendance_location(attendance)
+    return attendance
+
+
+def _apply_missed_fingerprint_request(missed_request):
+    employee = missed_request.employee_id
+    work_info = getattr(employee, "employee_work_info", None)
+    if not work_info or not work_info.shift_id:
+        raise ValidationError(_("Employee work info or shift not found."))
+
+    attendance_date = missed_request.attendance_date
+    punch_time = missed_request.punch_time
+    punch_datetime = datetime.datetime.combine(attendance_date, punch_time)
+    day = EmployeeShiftDay.objects.get(day=attendance_date.strftime("%A").lower())
+    shift = work_info.shift_id
+    minimum_hour, start_time_sec, end_time_sec = shift_schedule_today(
+        day=day, shift=shift
+    )
+    source = (
+        "biometric"
+        if missed_request.attendance_location
+        == MissedFingerprintRequest.AttendanceLocation.OFFICE
+        else "app"
+    )
+
+    attendance, _created = Attendance.objects.get_or_create(
+        employee_id=employee,
+        attendance_date=attendance_date,
+        defaults={
+            "shift_id": shift,
+            "work_type_id": work_info.work_type_id,
+            "attendance_day": day,
+            "minimum_hour": minimum_hour,
+            "attendance_location": missed_request.attendance_location,
+        },
+    )
+    attendance.shift_id = attendance.shift_id or shift
+    attendance.work_type_id = attendance.work_type_id or work_info.work_type_id
+    attendance.attendance_day = attendance.attendance_day or day
+    attendance.minimum_hour = attendance.minimum_hour or minimum_hour
+
+    if missed_request.punch_type == MissedFingerprintRequest.PunchType.IN:
+        duplicate = AttendanceActivity.objects.filter(
+            employee_id=employee,
+            attendance_date=attendance_date,
+            clock_in_date=attendance_date,
+            clock_in=punch_time,
+        ).exists()
+        if duplicate:
+            raise ValidationError(_("This check-in punch already exists."))
+        activity = AttendanceActivity.objects.create(
+            employee_id=employee,
+            attendance_date=attendance_date,
+            clock_in_date=attendance_date,
+            shift_day=day,
+            clock_in=punch_time,
+            in_datetime=punch_datetime,
+            clock_in_source=source,
+        )
+    else:
+        activity = (
+            AttendanceActivity.objects.filter(
+                employee_id=employee,
+                attendance_date=attendance_date,
+                clock_out__isnull=True,
+            )
+            .order_by("clock_in_date", "clock_in", "id")
+            .last()
+        )
+        if not activity:
+            raise ValidationError(
+                _("A check-out request needs an existing open check-in.")
+            )
+        in_datetime = activity.in_datetime or datetime.datetime.combine(
+            activity.clock_in_date, activity.clock_in
+        )
+        if punch_datetime <= in_datetime:
+            raise ValidationError(_("Check-out time must be after check-in time."))
+        activity.clock_out_date = attendance_date
+        activity.clock_out = punch_time
+        activity.out_datetime = punch_datetime
+        activity.clock_out_source = source
+        activity.save()
+
+    attendance = _recalculate_attendance_from_activities(attendance)
+    if attendance.attendance_clock_in:
+        late_come(
+            attendance=attendance,
+            start_time=start_time_sec,
+            end_time=end_time_sec,
+            shift=shift,
+        )
+    if attendance.attendance_clock_out:
+        early_out(
+            attendance=attendance,
+            start_time=start_time_sec,
+            end_time=end_time_sec,
+            shift=shift,
+        )
+    return attendance, activity
+
+
+@login_required
+def missed_fingerprint_request_approve(request, obj_id):
+    missed_request = MissedFingerprintRequest.objects.filter(id=obj_id).first()
+    if not missed_request:
+        messages.error(request, _("Missed fingerprint request not found."))
+        return HorillaRedirect(request)
+    if not _can_manage_missed_fingerprint_request(request, missed_request):
+        messages.error(request, _("You don't have permission"))
+        return HorillaRedirect(request)
+    if missed_request.status != MissedFingerprintRequest.Status.REQUESTED:
+        messages.info(
+            request, _("Only requested missed fingerprint requests can be approved.")
+        )
+        return HorillaRedirect(request)
+
+    try:
+        attendance, activity = _apply_missed_fingerprint_request(missed_request)
+    except ValidationError as error:
+        messages.error(request, error.messages[0])
+        return HorillaRedirect(request)
+
+    missed_request.status = MissedFingerprintRequest.Status.APPROVED
+    missed_request.approved_by = getattr(request.user, "employee_get", None)
+    missed_request.reviewed_at = timezone.now()
+    missed_request.attendance_id = attendance
+    missed_request.activity_id = activity
+    missed_request.save(
+        update_fields=[
+            "status",
+            "approved_by",
+            "reviewed_at",
+            "attendance_id",
+            "activity_id",
+        ]
+    )
+    messages.success(request, _("Missed fingerprint request approved"))
+    notify.send(
+        request.user,
+        recipient=missed_request.employee_id.employee_user_id,
+        verb=f"Your missed fingerprint request for {missed_request.attendance_date} is approved",
+        verb_ar=f"تمت الموافقة على طلب البصمة الفائتة بتاريخ {missed_request.attendance_date}",
+        verb_de=f"Ihr Antrag auf verpassten Fingerabdruck fuer den {missed_request.attendance_date} wurde genehmigt",
+        verb_es=f"Se aprobo tu solicitud de huella omitida para el {missed_request.attendance_date}",
+        verb_fr=f"Votre demande d'empreinte manquee pour le {missed_request.attendance_date} est approuvee",
+        redirect=reverse("request-attendance-view"),
+        icon="checkmark-circle-outline",
+    )
+    return HorillaRedirect(request)
+
+
+@login_required
+def missed_fingerprint_request_reject(request, obj_id):
+    missed_request = MissedFingerprintRequest.objects.filter(id=obj_id).first()
+    if not missed_request:
+        messages.error(request, _("Missed fingerprint request not found."))
+        return HorillaRedirect(request)
+    if not _can_manage_missed_fingerprint_request(request, missed_request):
+        messages.error(request, _("You don't have permission"))
+        return HorillaRedirect(request)
+    if missed_request.status != MissedFingerprintRequest.Status.REQUESTED:
+        messages.info(
+            request, _("Only requested missed fingerprint requests can be rejected.")
+        )
+        return HorillaRedirect(request)
+
+    missed_request.status = MissedFingerprintRequest.Status.REJECTED
+    missed_request.approved_by = getattr(request.user, "employee_get", None)
+    missed_request.reviewed_at = timezone.now()
+    missed_request.save(update_fields=["status", "approved_by", "reviewed_at"])
+    messages.success(request, _("Missed fingerprint request rejected"))
+    notify.send(
+        request.user,
+        recipient=missed_request.employee_id.employee_user_id,
+        verb=f"Your missed fingerprint request for {missed_request.attendance_date} is rejected",
+        verb_ar=f"تم رفض طلب البصمة الفائتة بتاريخ {missed_request.attendance_date}",
+        verb_de=f"Ihr Antrag auf verpassten Fingerabdruck fuer den {missed_request.attendance_date} wurde abgelehnt",
+        verb_es=f"Se rechazo tu solicitud de huella omitida para el {missed_request.attendance_date}",
+        verb_fr=f"Votre demande d'empreinte manquee pour le {missed_request.attendance_date} est rejetee",
+        redirect=reverse("request-attendance-view"),
+        icon="close-circle-outline",
+    )
+    return HorillaRedirect(request)
+
+
+@login_required
+def missed_fingerprint_request_cancel(request, obj_id):
+    missed_request = MissedFingerprintRequest.objects.filter(id=obj_id).first()
+    if not missed_request:
+        messages.error(request, _("Missed fingerprint request not found."))
+        return HorillaRedirect(request)
+
+    user_employee = getattr(request.user, "employee_get", None)
+    is_owner = user_employee and user_employee.id == missed_request.employee_id_id
+    if not (is_owner or _can_manage_missed_fingerprint_request(request, missed_request)):
+        messages.error(request, _("You don't have permission"))
+        return HorillaRedirect(request)
+    if missed_request.status != MissedFingerprintRequest.Status.REQUESTED:
+        messages.info(
+            request, _("Only requested missed fingerprint requests can be canceled.")
+        )
+        return HorillaRedirect(request)
+
+    missed_request.status = MissedFingerprintRequest.Status.CANCELED
+    missed_request.save(update_fields=["status"])
+    messages.success(request, _("Missed fingerprint request canceled"))
     return HorillaRedirect(request)
 
 

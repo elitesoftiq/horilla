@@ -323,6 +323,26 @@ urlpatterns = [
         name="attendance-shift-request-cancel",
     ),
     path(
+        "missed-fingerprint-request/create",
+        attendance.views.requests.missed_fingerprint_request_create,
+        name="missed-fingerprint-request-create",
+    ),
+    path(
+        "missed-fingerprint-request/<int:obj_id>/approve",
+        attendance.views.requests.missed_fingerprint_request_approve,
+        name="missed-fingerprint-request-approve",
+    ),
+    path(
+        "missed-fingerprint-request/<int:obj_id>/reject",
+        attendance.views.requests.missed_fingerprint_request_reject,
+        name="missed-fingerprint-request-reject",
+    ),
+    path(
+        "missed-fingerprint-request/<int:obj_id>/cancel",
+        attendance.views.requests.missed_fingerprint_request_cancel,
+        name="missed-fingerprint-request-cancel",
+    ),
+    path(
         "create-batch-attendance",
         attendance.views.requests.create_batch_attendance,
         name="create-batch-attendance",
@@ -486,6 +506,11 @@ urlpatterns = [
         "enable-disable-check-in",
         views.enable_disable_check_in,
         name="enable-disable-check-in",
+    ),
+    path(
+        "update-missed-punch-request-limit",
+        views.update_missed_punch_request_limit,
+        name="update-missed-punch-request-limit",
     ),
     path(
         "grace-settings-view/",

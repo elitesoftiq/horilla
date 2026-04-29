@@ -48,6 +48,7 @@ from attendance.models import (
     AttendancePolicy,
     AttendancePolicyViolation,
     AttendanceShiftRequest,
+    MissedFingerprintRequest,
     AttendanceRequestComment,
     AttendanceValidationCondition,
     BatchAttendance,
@@ -1400,3 +1401,49 @@ class AttendanceShiftRequestForm(BaseModelForm):
         self.instance.hybrid_violation_id = None
         self.instance.policy_violation_id = None
         return super().save(commit=commit)
+
+
+class MissedFingerprintRequestForm(BaseModelForm):
+    """
+    Request for an admin-approved missed biometric punch.
+    """
+
+    verbose_name = _("Create Missed Fingerprint Request")
+
+    class Meta:
+        model = MissedFingerprintRequest
+        fields = [
+            "employee_id",
+            "attendance_date",
+            "punch_time",
+            "punch_type",
+            "attendance_location",
+            "description",
+        ]
+        widgets = {
+            "attendance_date": forms.DateInput(attrs={"type": "date"}),
+            "punch_time": forms.TimeInput(attrs={"type": "time"}),
+            "description": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = getattr(horilla_middlewares._thread_locals, "request", None)
+        if request:
+            if request.user.has_perm("attendance.add_attendance") or is_reportingmanager(
+                request
+            ):
+                employees = filtersubordinatesemployeemodel(
+                    request, Employee.objects.all(), perm="attendance.change_attendance"
+                )
+                self.fields["employee_id"].queryset = (
+                    employees | Employee.objects.filter(employee_user_id=request.user)
+                ).distinct()
+            else:
+                self.fields["employee_id"].queryset = Employee.objects.filter(
+                    employee_user_id=request.user
+                )
+                if hasattr(request.user, "employee_get"):
+                    self.fields["employee_id"].initial = request.user.employee_get
+
+        self.fields["description"].required = False

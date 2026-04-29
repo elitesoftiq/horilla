@@ -2496,6 +2496,41 @@ def enable_disable_check_in(request):
 
 
 @login_required
+@hx_request_required
+@permission_required("attendance.change_attendancegeneralsetting")
+def update_missed_punch_request_limit(request):
+    """
+    Update monthly missed fingerprint request limit for an attendance setting.
+    """
+    if request.method == "POST":
+        setting_id = request.POST.get("setting_Id")
+        limit = request.POST.get("missed_punch_request_limit_per_month", "").strip()
+        setting = AttendanceGeneralSetting.objects.filter(id=setting_id).first()
+        if not setting:
+            messages.error(request, _("Attendance setting not found."))
+            return HttpResponse("")
+
+        if limit == "":
+            setting.missed_punch_request_limit_per_month = None
+        else:
+            try:
+                missed_punch_limit = int(limit)
+            except ValueError:
+                messages.error(request, _("Please enter a valid monthly limit."))
+                return HttpResponse("")
+            if missed_punch_limit < 0:
+                messages.error(request, _("Monthly limit cannot be negative."))
+                return HttpResponse("")
+            setting.missed_punch_request_limit_per_month = missed_punch_limit
+
+        setting.save(update_fields=["missed_punch_request_limit_per_month"])
+        messages.success(
+            request, _("Missed fingerprint request monthly limit updated.")
+        )
+    return HttpResponse("")
+
+
+@login_required
 @permission_required("attendance.view_attendancevalidationcondition")
 def grace_time_view(request):
     """

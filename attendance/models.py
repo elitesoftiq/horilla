@@ -1000,6 +1000,15 @@ class AttendanceGeneralSetting(HorillaModel):
             "Enabling this feature allows employees to record their attendance using the Check-In/Check-Out button."
         ),
     )
+    missed_punch_request_limit_per_month = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        default=3,
+        verbose_name=_("Missed Punch Request Limit Per Month"),
+        help_text=_(
+            "Maximum missed fingerprint requests an employee can submit each month. Leave blank for no limit."
+        ),
+    )
     company_id = models.ForeignKey(Company, on_delete=models.CASCADE, null=True)
     objects = HorillaCompanyManager()
 
@@ -1415,3 +1424,157 @@ class AttendanceShiftRequest(HorillaModel):
 
     def request_status(self):
         return _("Canceled") if self.canceled else _("Requested")
+
+
+class MissedFingerprintRequest(HorillaModel):
+    """
+    Request submitted when an employee forgot to punch through the biometric device.
+    """
+
+    class PunchType(models.TextChoices):
+        IN = "in", _("In")
+        OUT = "out", _("Out")
+
+    class AttendanceLocation(models.TextChoices):
+        OFFICE = "office", _("Office")
+        WFH = "wfh", _("Remote")
+
+    class Status(models.TextChoices):
+        REQUESTED = "requested", _("Requested")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+        CANCELED = "canceled", _("Canceled")
+
+    employee_id = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="missed_fingerprint_requests",
+        verbose_name=_("Employee"),
+    )
+    attendance_date = models.DateField(
+        validators=[attendance_date_validate],
+        verbose_name=_("Attendance Date"),
+    )
+    punch_time = models.TimeField(verbose_name=_("Punch Time"))
+    punch_type = models.CharField(
+        max_length=10,
+        choices=PunchType.choices,
+        verbose_name=_("Punch Type"),
+    )
+    attendance_location = models.CharField(
+        max_length=6,
+        choices=AttendanceLocation.choices,
+        verbose_name=_("Work Type"),
+    )
+    description = models.TextField(
+        null=True, blank=True, verbose_name=_("Description")
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.REQUESTED,
+        verbose_name=_("Status"),
+    )
+    approved_by = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_missed_fingerprint_requests",
+        verbose_name=_("Approved By"),
+        editable=False,
+    )
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("Reviewed At"),
+    )
+    reject_reason = models.TextField(
+        null=True, blank=True, verbose_name=_("Reject Reason")
+    )
+    attendance_id = models.ForeignKey(
+        Attendance,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="missed_fingerprint_requests",
+        verbose_name=_("Attendance"),
+        editable=False,
+    )
+    activity_id = models.ForeignKey(
+        AttendanceActivity,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="missed_fingerprint_requests",
+        verbose_name=_("Attendance Activity"),
+        editable=False,
+    )
+    objects = HorillaCompanyManager(
+        related_company_field="employee_id__employee_work_info__company_id"
+    )
+
+    class Meta:
+        verbose_name = _("Missed Fingerprint Request")
+        verbose_name_plural = _("Missed Fingerprint Requests")
+        ordering = ["-attendance_date", "-punch_time", "-id"]
+
+    def clean(self):
+        super().clean()
+        if not self.employee_id or not self.attendance_date:
+            return
+        if self.status == self.Status.REQUESTED:
+            duplicate_exists = (
+                MissedFingerprintRequest.objects.filter(
+                    employee_id=self.employee_id,
+                    attendance_date=self.attendance_date,
+                    punch_time=self.punch_time,
+                    punch_type=self.punch_type,
+                    status=self.Status.REQUESTED,
+                )
+                .exclude(id=self.id)
+                .exists()
+            )
+            if duplicate_exists:
+                raise ValidationError(
+                    _("A similar missed fingerprint request is already pending.")
+                )
+        monthly_limit = self.get_monthly_limit_for_employee(self.employee_id)
+        if monthly_limit is not None:
+            monthly_requests = (
+                MissedFingerprintRequest.objects.filter(
+                    employee_id=self.employee_id,
+                    attendance_date__year=self.attendance_date.year,
+                    attendance_date__month=self.attendance_date.month,
+                )
+                .exclude(status=self.Status.CANCELED)
+                .exclude(id=self.id)
+                .count()
+            )
+            if monthly_requests >= monthly_limit:
+                raise ValidationError(
+                    _(
+                        "Monthly missed fingerprint request limit reached for this employee."
+                    )
+                )
+
+    @staticmethod
+    def get_monthly_limit_for_employee(employee):
+        company = getattr(
+            getattr(employee, "employee_work_info", None), "company_id", None
+        )
+        setting = None
+        if company:
+            setting = AttendanceGeneralSetting.objects.filter(company_id=company).first()
+        if not setting:
+            setting = AttendanceGeneralSetting.objects.filter(company_id=None).first()
+        if not setting:
+            return None
+        return setting.missed_punch_request_limit_per_month
+
+    def __str__(self):
+        return (
+            f"{self.employee_id} - {self.attendance_date} "
+            f"{self.punch_time} ({self.get_punch_type_display()})"
+        )
